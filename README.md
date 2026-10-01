@@ -5,6 +5,8 @@ container on private App Service, plus Azure platform logs (diagnostic settings 
 (Azure Monitor API). Everything is private (private endpoints, no public IPs on workloads), deployed with Terraform,
 and every Azure credential is a managed identity.
 
+See [docs/signoz-poc-report.md](docs/signoz-poc-report.md) for the full write-up.
+
 ```text
 App Service (.NET 8 + OTel auto-instrumentation, no code change)
    ├─ OTLP ───────────────────────────────┐
@@ -23,11 +25,12 @@ Access: Bastion → Windows support VM (peered VNet) → browser to the app and 
 | `app/` | DQ Lite demo app (ASP.NET Core 8, EF Core, Azure SQL), Dockerfile with OpenTelemetry auto-instrumentation, `deploy.sh` |
 | `collector/` | OpenTelemetry Collector config, Docker Compose, `install.sh` (blobfuse2 mount + start) |
 | `signoz/` | `casting.yaml` for SigNoz's Foundry installer (pinned versions, patches) |
-| `docs/signoz-poc-report.html` | Full write-up: architecture, Azure resources, Terraform, app, OpenTelemetry, SigNoz, tests, 20 issues with fixes, timeline, security, cost, production gaps |
-| `docs/architecture.html` | Interactive architecture diagram (overview, network, telemetry pipeline) and every flow |
-| `docs/build/` | Generator for both pages: `python3 docs/build/build_report.py` (logos in `docs/build/icons/`) |
+| `docs/signoz-poc-report.md` | Full write-up: architecture, Azure resources, Terraform, app, OpenTelemetry, SigNoz, tests, 20 issues with fixes, timeline, security, cost, production gaps |
+| `docs/diagrams/*.drawio.svg` | Architecture and telemetry-pipeline diagrams (editable draw.io files that render as images) |
 
-Open the HTML files in a browser after cloning (GitHub shows HTML as source).
+![SigNoz on Azure — POC architecture](docs/diagrams/architecture.drawio.svg)
+
+The diagrams are `.drawio.svg` files: open them in draw.io desktop, the VS Code *Draw.io Integration* extension or app.diagrams.net, edit and save. GitHub and the Markdown docs show the updated image automatically.
 
 ## Deploy
 
