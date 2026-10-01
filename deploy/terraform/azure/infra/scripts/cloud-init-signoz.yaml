@@ -1,0 +1,22 @@
+#cloud-config
+# SigNoz VM bootstrap. Phase 1: tools. Collector (Phase 2) and SigNoz (Phase 3) added later.
+package_update: true
+packages:
+  - ca-certificates
+  - curl
+  - gnupg
+  - jq
+  - dnsutils
+  - netcat-openbsd
+runcmd:
+  # Docker
+  - curl -fsSL https://get.docker.com | sh
+  - usermod -aG docker azureuser
+  # Azure CLI
+  - curl -sL https://aka.ms/InstallAzureCLIDeb | bash
+  # blobfuse2 (Microsoft package repo)
+  - curl -fsSL https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor -o /usr/share/keyrings/microsoft-prod.gpg
+  - echo "deb [arch=amd64 signed-by=/usr/share/keyrings/microsoft-prod.gpg] https://packages.microsoft.com/ubuntu/24.04/prod noble main" > /etc/apt/sources.list.d/microsoft-prod.list
+  - apt-get update
+  - apt-get install -y blobfuse2 fuse3
+  - touch /var/lib/cloud/instance/poc-ready

@@ -1,0 +1,859 @@
+<title>SigNoz POC on Azure</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: engineering report — fixed contents rail on wide screens, single reading column, wide blocks (tables, diagrams, code) scroll in place. */
+:root{
+  --bg:#f6f7f9; --paper:#ffffff; --ink:#18212b; --muted:#566273; --rule:#d9dee5; --soft:#eef1f5;
+  --azure:#0f6cbd; --azure-soft:#e3eefa; --otel:#e2572a; --otel-soft:#fcebe4;
+  --ok:#1a7f45; --ok-soft:#e2f3e8; --warn:#9a6300; --warn-soft:#fbf0d9; --bad:#b42318; --bad-soft:#fbe5e3; --info:#5b4bb7; --info-soft:#ece9fb;
+  --edge-req:#0f6cbd; --edge-otlp:#e2572a; --edge-log:#7a4fd1; --edge-met:#1a7f45; --edge-data:#6b7788;
+  --f-display:"IBM Plex Sans Condensed","Arial Narrow",system-ui,sans-serif;
+  --f-body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0f141a; --paper:#151c24; --ink:#e3e8ee; --muted:#9aa6b4; --rule:#2a3441; --soft:#1b242e;
+  --azure:#5aa7ee; --azure-soft:#15283b; --otel:#ff8a5c; --otel-soft:#35201a;
+  --ok:#55c283; --ok-soft:#14291d; --warn:#e2b34f; --warn-soft:#2e2412; --bad:#f0776b; --bad-soft:#35191a; --info:#a597f2; --info-soft:#221e3a;
+  --edge-req:#5aa7ee; --edge-otlp:#ff8a5c; --edge-log:#a98bf0; --edge-met:#55c283; --edge-data:#8995a5; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f141a; --paper:#151c24; --ink:#e3e8ee; --muted:#9aa6b4; --rule:#2a3441; --soft:#1b242e;
+  --azure:#5aa7ee; --azure-soft:#15283b; --otel:#ff8a5c; --otel-soft:#35201a;
+  --ok:#55c283; --ok-soft:#14291d; --warn:#e2b34f; --warn-soft:#2e2412; --bad:#f0776b; --bad-soft:#35191a; --info:#a597f2; --info-soft:#221e3a;
+  --edge-req:#5aa7ee; --edge-otlp:#ff8a5c; --edge-log:#a98bf0; --edge-met:#55c283; --edge-data:#8995a5; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font:15px/1.6 var(--f-body);margin:0}
+.wrap{display:grid;grid-template-columns:260px minmax(0,1fr);gap:40px;max-width:1360px;margin:0 auto;padding-inline:24px;padding-block:32px 80px}
+nav.toc{position:sticky;top:calc(env(safe-area-inset-top,0px) + 16px);align-self:start;max-height:calc(100vh - 32px);overflow:auto;font-size:13px}
+nav.toc .brand{font:600 12px/1.3 var(--f-display);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:10px}
+nav.toc ol{list-style:none;margin:0;padding:0;counter-reset:t}
+nav.toc li a{display:flex;gap:8px;padding:5px 8px;border-radius:6px;color:var(--ink);text-decoration:none}
+nav.toc li a:hover,nav.toc li a:focus-visible{background:var(--soft);outline:none}
+nav.toc li a span{color:var(--muted);font-variant-numeric:tabular-nums;min-width:20px}
+main{min-width:0;background:var(--paper);border:1px solid var(--rule);border-radius:10px;padding-inline:clamp(18px,4vw,56px);padding-block:40px 64px}
+header.cover{border-bottom:1px solid var(--rule);padding-bottom:28px;margin-bottom:8px}
+.eyebrow{font:600 12px/1 var(--f-display);letter-spacing:.1em;text-transform:uppercase;color:var(--azure)}
+h1{font:700 clamp(28px,4vw,40px)/1.1 var(--f-display);margin:.35em 0 .3em;text-wrap:balance;letter-spacing:-.01em}
+h2{font:700 26px/1.2 var(--f-display);margin:56px 0 12px;padding-top:16px;border-top:1px solid var(--rule);text-wrap:balance}
+h2 .n{color:var(--muted);font-weight:600;margin-right:10px;font-variant-numeric:tabular-nums}
+h3{font:600 18px/1.3 var(--f-display);margin:30px 0 8px}
+h4{font:600 15px/1.3 var(--f-body);margin:20px 0 6px}
+p,li{max-width:78ch}
+.lede{font-size:17px;color:var(--muted);max-width:70ch}
+.meta{display:flex;flex-wrap:wrap;gap:8px 24px;font-size:13px;color:var(--muted);margin-top:14px}
+.meta b{color:var(--ink);font-weight:600}
+code,kbd{font:13px/1.4 var(--f-mono);background:var(--soft);padding:1px 5px;border-radius:4px;word-break:break-word}
+pre{font:12.5px/1.55 var(--f-mono);background:var(--soft);border:1px solid var(--rule);border-radius:8px;padding:14px 16px;overflow-x:auto;margin:10px 0 16px}
+pre code{background:none;padding:0}
+.tbl{overflow-x:auto;margin:12px 0 18px;border:1px solid var(--rule);border-radius:8px}
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+th,td{padding:8px 11px;text-align:left;vertical-align:top;border-bottom:1px solid var(--rule)}
+th{background:var(--soft);font:600 12px/1.3 var(--f-body);letter-spacing:.03em;text-transform:uppercase;color:var(--muted);white-space:nowrap}
+tr:last-child td{border-bottom:0}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+.pill{display:inline-block;font:600 11.5px/1 var(--f-body);padding:4px 8px;border-radius:999px;white-space:nowrap}
+.ok{background:var(--ok-soft);color:var(--ok)} .warn{background:var(--warn-soft);color:var(--warn)} .bad{background:var(--bad-soft);color:var(--bad)} .info{background:var(--info-soft);color:var(--info)} .az{background:var(--azure-soft);color:var(--azure)}
+.callout{border:1px solid var(--rule);border-left:4px solid var(--azure);background:var(--soft);border-radius:8px;padding:12px 16px;margin:16px 0}
+.callout.warn{border-left-color:var(--warn)} .callout.ok{border-left-color:var(--ok)}
+.callout p{margin:.3em 0}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:18px 0}
+.kpi{border:1px solid var(--rule);border-radius:8px;padding:12px 14px}
+.kpi .v{font:700 26px/1.1 var(--f-display);font-variant-numeric:tabular-nums}
+.kpi .l{font-size:12.5px;color:var(--muted)}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px}
+.grid2>*{min-width:0}
+.issue{border:1px solid var(--rule);border-radius:8px;margin:14px 0;overflow:hidden}
+.issue summary{cursor:pointer;list-style:none;display:flex;gap:10px;align-items:baseline;padding:11px 14px;background:var(--soft)}
+.issue summary::-webkit-details-marker{display:none}
+.issue summary:focus-visible{outline:2px solid var(--azure);outline-offset:-2px}
+.issue summary .id{font:600 12px var(--f-mono);color:var(--muted);min-width:34px}
+.issue summary .t{font-weight:600;flex:1}
+.issue .body{padding:4px 16px 12px}
+.issue dl{display:grid;grid-template-columns:170px minmax(0,1fr);gap:6px 16px;margin:10px 0}
+.issue dt{font-size:12.5px;color:var(--muted);font-weight:600}
+.issue dd{margin:0;min-width:0}
+.timeline{list-style:none;padding:0;margin:14px 0;border-left:2px solid var(--rule)}
+.timeline li{position:relative;padding:0 0 14px 20px;max-width:none}
+.timeline li::before{content:"";position:absolute;left:-7px;top:6px;width:12px;height:12px;border-radius:50%;background:var(--paper);border:2px solid var(--azure)}
+.timeline li.bad::before{border-color:var(--bad)} .timeline li.ok::before{border-color:var(--ok)} .timeline li.warn::before{border-color:var(--warn)}
+.timeline .when{font:500 12px var(--f-mono);color:var(--muted)}
+/* diagram */
+.diagram{border:1px solid var(--rule);border-radius:10px;margin:16px 0;background:var(--paper)}
+.dtabs{display:flex;flex-wrap:wrap;gap:6px;padding:10px;border-bottom:1px solid var(--rule)}
+.dtabs button{font:600 13px var(--f-body);border:1px solid var(--rule);background:var(--paper);color:var(--ink);padding:6px 12px;border-radius:6px;cursor:pointer}
+.dtabs button[aria-selected="true"]{background:var(--azure);border-color:var(--azure);color:#fff}
+.dtabs button:focus-visible{outline:2px solid var(--azure);outline-offset:2px}
+.dcanvas{overflow-x:auto}
+.dcanvas svg{display:block;min-width:980px;width:100%;height:auto}
+.dpanel{display:grid;grid-template-columns:minmax(0,1fr) minmax(220px,300px);gap:0;border-top:1px solid var(--rule)}
+.dpanel .info{padding:12px 16px;font-size:13.5px;min-height:92px}
+.dpanel .info h4{margin:0 0 4px}
+.legend{padding:12px 16px;border-left:1px solid var(--rule);font-size:12.5px;display:grid;gap:5px}
+.legend .row{display:flex;align-items:center;gap:8px}
+.legend svg{flex:none}
+svg .node{cursor:pointer}
+svg .node:focus{outline:none}
+svg .node:focus rect.hit, svg .node:hover rect.hit{stroke:var(--azure);stroke-width:2}
+svg .node.sel rect.hit{stroke:var(--otel);stroke-width:2.5}
+svg text{font-family:var(--f-body);fill:var(--ink)}
+svg .lbl{font-size:12px;font-weight:600}
+svg .sub{font-size:10.5px;fill:var(--muted)}
+svg .zone-t{font:600 12px var(--f-display);letter-spacing:.06em;text-transform:uppercase;fill:var(--muted)}
+svg .zone{fill:none;stroke:var(--rule);stroke-width:1.5}
+svg .zone.az{stroke:var(--azure);stroke-dasharray:6 4}
+svg .zone.sn{stroke:var(--edge-data);stroke-dasharray:3 3}
+svg .card{fill:var(--paper);stroke:var(--rule)}
+svg .e{fill:none;stroke-width:2}
+svg .e.req{stroke:var(--edge-req)} svg .e.otlp{stroke:var(--edge-otlp)} svg .e.log{stroke:var(--edge-log)} svg .e.met{stroke:var(--edge-met)} svg .e.data{stroke:var(--edge-data);stroke-dasharray:5 4}
+svg .el{font-size:10.5px;fill:var(--muted)}
+.foot{margin-top:48px;font-size:12.5px;color:var(--muted);border-top:1px solid var(--rule);padding-top:14px}
+@media (max-width:980px){.wrap{grid-template-columns:minmax(0,1fr)} nav.toc{position:static;max-height:none;border:1px solid var(--rule);border-radius:10px;padding:14px;background:var(--paper)} .dpanel{grid-template-columns:minmax(0,1fr)} .legend{border-left:0;border-top:1px solid var(--rule)} .issue dl{grid-template-columns:minmax(0,1fr)}}
+@media (prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
+html{scroll-behavior:smooth}
+a{color:var(--azure)}
+</style>
+
+<div class="wrap">
+<nav class="toc" aria-label="Contents">
+  <div class="brand">Contents</div>
+  <ol>
+    <li><a href="#s1"><span>1</span>Executive summary</a></li>
+    <li><a href="#s2"><span>2</span>Proposed vs implemented</a></li>
+    <li><a href="#s3"><span>3</span>Azure infrastructure</a></li>
+    <li><a href="#s4"><span>4</span>Terraform implementation</a></li>
+    <li><a href="#s5"><span>5</span>Application</a></li>
+    <li><a href="#s6"><span>6</span>OpenTelemetry</a></li>
+    <li><a href="#s7"><span>7</span>SigNoz setup</a></li>
+    <li><a href="#s8"><span>8</span>Testing performed</a></li>
+    <li><a href="#s9"><span>9</span>Errors and troubleshooting</a></li>
+    <li><a href="#s10"><span>10</span>Troubleshooting timeline</a></li>
+    <li><a href="#s11"><span>11</span>Security</a></li>
+    <li><a href="#s12"><span>12</span>Cost</a></li>
+    <li><a href="#s13"><span>13</span>Production considerations</a></li>
+    <li><a href="#s14"><span>14</span>Final architecture and flows</a></li>
+    <li><a href="#s15"><span>15</span>Final POC result</a></li>
+  </ol>
+</nav>
+
+<main>
+<header class="cover">
+  <div class="eyebrow">Azure Observability · Proof of Concept</div>
+  <h1>SigNoz POC – End-to-End Implementation, Architecture, Testing &amp; Troubleshooting</h1>
+  <p class="lede">A self-hosted SigNoz stack on Azure, fed by OpenTelemetry from a data-quality style .NET 8 application on private App Service, plus Azure platform logs and metrics. Everything below is taken from the deployed environment, its Terraform state, the code in the repository, and the command output recorded during the build.</p>
+  <div class="meta">
+    <span><b>Status</b> Phases 1–3 (Stages A–C) complete · Stage D (dashboards, alerts, formal tests) pending</span>
+    <span><b>Dates</b> 29–30 Sept 2026</span>
+    <span><b>Environment</b> <code>poc-centralindia</code> · Azure free trial</span>
+  </div>
+</header>
+
+<!-- ============================================================ 1 -->
+<h2 id="s1"><span class="n">1</span>Executive summary</h2>
+
+<h3>Purpose and objective</h3>
+<p>Many hosted .NET platforms run without application monitoring, alerting or dashboards, and Azure-native options such as Log Analytics can be expensive at scale. This POC tests whether <b>SigNoz with OpenTelemetry</b> can provide traces, metrics and logs for a typical hosted .NET workload on Azure: a single .NET 8 container on App Service, Azure SQL, Key Vault, Blob storage and private endpoints, with a central collection design.</p>
+
+<h3>What we set out to validate</h3>
+<ul>
+  <li>Application telemetry from a .NET 8 container with <b>OpenTelemetry auto-instrumentation and no code change</b>, a "one image change" path for applications whose code cannot change.</li>
+  <li>Legacy-style <b>plain-text log files in Blob storage</b> ingested into SigNoz.</li>
+  <li>Azure <b>platform logs</b> through diagnostic settings → Event Hub, and <b>platform metrics</b> from the Azure Monitor API, both with managed identity.</li>
+  <li>A fully <b>private</b> network: no public endpoints on the app, database, storage, Event Hub or SigNoz.</li>
+  <li>Reproducible infrastructure in Terraform, one file per component.</li>
+</ul>
+
+<h3>What was implemented</h3>
+<div class="kpis">
+  <div class="kpi"><div class="v">48</div><div class="l">Azure resources in 2 regions, all from Terraform</div></div>
+  <div class="kpi"><div class="v">6</div><div class="l">telemetry sources flowing into SigNoz</div></div>
+  <div class="kpi"><div class="v">0</div><div class="l">lines of OpenTelemetry code in the app</div></div>
+  <div class="kpi"><div class="v">20</div><div class="l">issues diagnosed and resolved</div></div>
+</div>
+<p>The final environment runs in <b>Central India</b> (main stack) with a Windows support VM in <b>South India</b>. The original target region, UK South, was blocked by Azure free-trial restrictions (§9). SigNoz v0.143.0 runs self-hosted on one VM, installed with SigNoz's current installer (Foundry), and receives data through an OpenTelemetry Collector (contrib 0.161.0) on the same VM.</p>
+
+<h3>Key outcome</h3>
+<div class="callout ok">
+  <p><b>The collection architecture works end to end.</b> Application traces, application metrics, application logs with trace correlation, Blob text logs, Azure Monitor metrics, Azure diagnostic logs and host metrics all arrive in SigNoz, with every Azure-side credential handled by managed identity.</p>
+</div>
+<div class="tbl"><table>
+<thead><tr><th>Finding</th><th>Why it matters</th></tr></thead>
+<tbody>
+<tr><td>Auto-instrumentation of a .NET 8 container needs only an image layer plus app settings</td><td>Confirms the lowest-effort path for teams with infrequent releases or no code access</td></tr>
+<tr><td>Private Event Hubs silently drop diagnostic logs unless <b>trusted Microsoft services</b> is enabled</td><td>Must be set on every production namespace, or platform logs are lost with no error</td></tr>
+<tr><td>Event Hub managed-identity auth needs collector-contrib <b>≥ 0.161</b> (0.135 needed a connection string)</td><td>Allows a keyless production design</td></tr>
+<tr><td>SigNoz's ingester stays closed until the first admin signs up</td><td>Installation runbooks must include the sign-up step before data can flow</td></tr>
+<tr><td>SigNoz Docker Compose install is deprecated; Foundry is the supported installer</td><td>Production runbooks should be written for Foundry</td></tr>
+<tr><td>Free-trial subscriptions block VM capacity, SQL, App Service and ACR Tasks in UK South</td><td>A production-like POC should run on a pay-as-you-go subscription in the target region</td></tr>
+</tbody></table></div>
+<p><b>Not yet done:</b> dashboards, alert rules and the formal test run with load, restart and evidence capture (Stage D, scheduled next). See §15.</p>
+
+<!-- ============================================================ 2 -->
+<h2 id="s2"><span class="n">2</span>Proposed vs implemented architecture</h2>
+
+<h3>2.1 Original proposal</h3>
+<p>The reference target architecture covers a multi-environment estate in UK South: a central OpenTelemetry Collector on Azure Container Apps, one shared Event Hub fed by diagnostic settings, the <code>azuremonitor</code> receiver across all subscriptions, SigNoz either self-hosted or on SigNoz Cloud, and alert rules grouped by <code>tenant.id</code> and <code>deployment.environment</code>.</p>
+<p>The first POC plan (v1) was then reduced, at the team's request, to a small three-phase build that can run for 1–3 days on a free-trial subscription.</p>
+
+<h3>2.2 Implemented POC</h3>
+<p>The interactive diagram below shows what is deployed. Choose a view and click any component for its details. §14 walks through every flow.</p>
+
+{{DIAGRAM}}
+
+<h3>2.3 Differences and reasons</h3>
+<div class="tbl"><table>
+<thead><tr><th>Area</th><th>Proposed</th><th>Implemented</th><th>Reason</th></tr></thead>
+<tbody>
+<tr><td>Scale</td><td>Many environments and subscriptions</td><td>1 environment, 1 subscription</td><td>POC scope; volumes are to be measured and multiplied</td></tr>
+<tr><td>Region</td><td>UK South</td><td>Central India (+ South India support VM)</td><td>UK South refused VMs, SQL and App Service on the free trial (issues 4–6)</td></tr>
+<tr><td>Collector</td><td>Central, on Container Apps</td><td>On the SigNoz VM (Docker)</td><td>Agreed simplification; Container Apps remains an optional Phase 4</td></tr>
+<tr><td>SigNoz</td><td>Self-hosted HA (AKS) or SigNoz Cloud</td><td>Self-hosted, single VM, Foundry</td><td>Smallest footprint that proves the self-hosted path</td></tr>
+<tr><td>Access</td><td>Private, engineer access via existing paths</td><td>Bastion Standard → Windows support VM (peered VNet)</td><td>No public IPs on workloads; one browser-capable jump host</td></tr>
+<tr><td>App</td><td>Real production application</td><td>DQ Lite, a data-quality demo (.NET 8, EF Core, Azure SQL, Blob text logs)</td><td>No production code or data in the POC</td></tr>
+<tr><td>Event Hub</td><td>Standard, shared</td><td>Standard, private endpoint, trusted services on</td><td>Standard is the lowest tier with private endpoints</td></tr>
+<tr><td>VPN, Entra secret expiry, scheduler, SMTP</td><td>In scope for alerts</td><td>Out of scope</td><td>Agreed to keep the POC small</td></tr>
+<tr><td>SQL tier</td><td>Production tier</td><td>Basic (5 DTU)</td><td>Cost; free SQL offer could not be set cleanly from Terraform</td></tr>
+</tbody></table></div>
+
+<!-- ============================================================ 3 -->
+<h2 id="s3"><span class="n">3</span>Azure infrastructure</h2>
+<p>All resources are in resource group <code>rg-sigpoc-poc-cin</code>, created by Terraform workspace <code>poc-centralindia</code>. The generated suffix for globally unique names is <code>xxxxx</code>. Names follow <code>{type}-{project}-{environment}-{region}</code>.</p>
+
+<h3>3.1 Resource inventory</h3>
+<div class="tbl"><table>
+<thead><tr><th>Component</th><th>Azure name</th><th>Terraform resource</th><th>Region</th></tr></thead>
+<tbody>
+<tr><td>Resource group</td><td><code>rg-sigpoc-poc-cin</code></td><td><code>azurerm_resource_group.main</code></td><td>centralindia</td></tr>
+<tr><td>Main VNet</td><td><code>vnet-sigpoc-poc-cin</code> (10.20.0.0/16)</td><td><code>azurerm_virtual_network.main</code></td><td>centralindia</td></tr>
+<tr><td>Support VNet</td><td><code>vnet-sigpoc-poc-sin</code> (10.30.0.0/16)</td><td><code>azurerm_virtual_network.support</code></td><td>southindia</td></tr>
+<tr><td>VNet peering ×2</td><td><code>peer-sigpoc-poc-cin-to-sigpoc-poc-sin</code> and reverse</td><td><code>azurerm_virtual_network_peering.*</code></td><td>—</td></tr>
+<tr><td>Subnets ×5</td><td>see 3.2</td><td><code>azurerm_subnet.*</code></td><td>both</td></tr>
+<tr><td>NSGs ×2</td><td><code>nsg-signoz-sigpoc-poc-cin</code>, <code>nsg-support-sigpoc-poc-sin</code></td><td><code>azurerm_network_security_group.*</code></td><td>both</td></tr>
+<tr><td>Bastion (Standard, tunnelling on)</td><td><code>bas-sigpoc-poc-cin</code> + <code>pip-bas-sigpoc-poc-cin</code></td><td><code>azurerm_bastion_host.main</code>, <code>azurerm_public_ip.bastion</code></td><td>centralindia</td></tr>
+<tr><td>SigNoz VM</td><td><code>vm-signoz-sigpoc-poc-cin</code>, Standard_B4as_v2 (4 vCPU/16 GB), Ubuntu 24.04, 64 GB Premium SSD, 10.20.1.10</td><td><code>azurerm_linux_virtual_machine.signoz</code></td><td>centralindia</td></tr>
+<tr><td>Support VM</td><td><code>vm-support-sigpoc-poc-sin</code>, Standard_B2s_v2 (2 vCPU/8 GB), Windows Server 2022, 10.30.1.10</td><td><code>azurerm_windows_virtual_machine.support</code></td><td>southindia</td></tr>
+<tr><td>VM auto-shutdown ×2</td><td>19:00 India Standard Time</td><td><code>azurerm_dev_test_global_vm_shutdown_schedule.*</code></td><td>both</td></tr>
+<tr><td>App Service plan</td><td><code>asp-sigpoc-poc-cin</code>, Linux B1</td><td><code>azurerm_service_plan.main</code></td><td>centralindia</td></tr>
+<tr><td>Web App</td><td><code>app-dqlite-sigpoc-poc-cin-xxxxx</code>, container <code>dqlite-api:v1</code></td><td><code>azurerm_linux_web_app.api</code></td><td>centralindia</td></tr>
+<tr><td>Container registry</td><td><code>crsigpocpocxxxxx</code>, Basic, admin user off</td><td><code>azurerm_container_registry.main</code></td><td>centralindia</td></tr>
+<tr><td>SQL logical server</td><td><code>sql-sigpoc-poc-cin-xxxxx</code>, TLS 1.2, public access off</td><td><code>azurerm_mssql_server.main</code></td><td>centralindia</td></tr>
+<tr><td>SQL database</td><td><code>sqldb-dqlite</code>, Basic, 2 GB, LRS backups</td><td><code>azurerm_mssql_database.main</code></td><td>centralindia</td></tr>
+<tr><td>Storage account</td><td><code>stsigpocpocxxxxx</code>, LRS, shared keys off, public access off; container <code>app-logs</code></td><td><code>azurerm_storage_account.main</code>, <code>azurerm_storage_container.app_logs</code></td><td>centralindia</td></tr>
+<tr><td>Event Hubs namespace</td><td><code>evhns-sigpoc-poc-cin-xxxxx</code>, Standard, 1 TU, trusted services on</td><td><code>azurerm_eventhub_namespace.main</code></td><td>centralindia</td></tr>
+<tr><td>Event hub + consumer group</td><td><code>platform-logs</code> (2 partitions, 1 day), group <code>otelcol</code></td><td><code>azurerm_eventhub.platform_logs</code>, <code>azurerm_eventhub_consumer_group.otelcol</code></td><td>centralindia</td></tr>
+<tr><td>Key Vault</td><td><code>kv-sigpoc-poc-xxxxx</code>, RBAC mode, soft-delete 7 days</td><td><code>azurerm_key_vault.main</code></td><td>centralindia</td></tr>
+<tr><td>Key Vault secrets ×4</td><td>sql-admin-password, sql-connection-string, support-vm-admin-password, signoz-vm-ssh-private-key</td><td><code>azurerm_key_vault_secret.*</code></td><td>—</td></tr>
+<tr><td>Private endpoints ×5</td><td><code>pe-{webapp,sql,blob,eventhub,keyvault}-sigpoc-poc-cin</code></td><td><code>azurerm_private_endpoint.*</code></td><td>centralindia</td></tr>
+<tr><td>Private DNS zones ×5 + 10 links</td><td>privatelink.{azurewebsites.net, database.windows.net, blob.core.windows.net, servicebus.windows.net, vaultcore.azure.net}</td><td><code>azurerm_private_dns_zone.zones</code>, <code>…_virtual_network_link.{main,support}</code></td><td>global</td></tr>
+<tr><td>Diagnostic settings ×2</td><td><code>diag-to-eventhub</code> on Web App and SQL database (allLogs)</td><td><code>azurerm_monitor_diagnostic_setting.*</code></td><td>—</td></tr>
+<tr><td>Role assignments ×8</td><td>see 3.4</td><td><code>azurerm_role_assignment.*</code></td><td>—</td></tr>
+</tbody></table></div>
+<p>There is <b>no load balancer</b>. App Service provides its own front end (reached only through its private endpoint) and Bastion provides administrative access. Azure also created the VM OS disks and the private endpoints' network interfaces.</p>
+
+<h3>3.2 Networking</h3>
+<div class="tbl"><table>
+<thead><tr><th>Subnet</th><th>CIDR</th><th>Purpose</th><th>Connects to</th></tr></thead>
+<tbody>
+<tr><td><code>AzureBastionSubnet</code></td><td>10.20.0.0/26</td><td>Bastion host (name required by Azure)</td><td>RDP to support VM (over peering), SSH to SigNoz VM</td></tr>
+<tr><td><code>snet-signoz</code></td><td>10.20.1.0/24</td><td>SigNoz VM, NSG attached</td><td>Receives OTLP from the app; reaches private endpoints and Azure APIs</td></tr>
+<tr><td><code>snet-app-integration</code></td><td>10.20.2.0/26</td><td>Web App outbound VNet integration, delegated to <code>Microsoft.Web/serverFarms</code>, route-all on</td><td>SQL, Key Vault, Blob private endpoints; SigNoz VM :4318</td></tr>
+<tr><td><code>snet-private-endpoints</code></td><td>10.20.3.0/27</td><td>Private endpoints: Event Hub .4, SQL .5, Blob .6, Key Vault .7, Web App .8 (observed)</td><td>Resolved through the private DNS zones</td></tr>
+<tr><td><code>snet-support</code> (support VNet)</td><td>10.30.1.0/24</td><td>Windows support VM, NSG attached</td><td>Peered to the main VNet; DNS zones linked</td></tr>
+</tbody></table></div>
+
+<h4>NSG rules (inbound)</h4>
+<div class="tbl"><table>
+<thead><tr><th>NSG</th><th class="num">Priority</th><th>Rule</th><th>Source</th><th>Ports</th></tr></thead>
+<tbody>
+<tr><td rowspan="4"><code>nsg-signoz-…-cin</code></td><td class="num">100</td><td>allow-ssh-from-bastion</td><td>10.20.0.0/26</td><td>22</td></tr>
+<tr><td class="num">110</td><td>allow-from-support-vm</td><td>10.30.1.0/24</td><td>22, 8080</td></tr>
+<tr><td class="num">120</td><td>allow-otlp-from-webapp</td><td>10.20.2.0/26</td><td>4317, 4318</td></tr>
+<tr><td class="num">4000</td><td>deny-vnet-inbound</td><td>VirtualNetwork</td><td>all</td></tr>
+<tr><td rowspan="2"><code>nsg-support-…-sin</code></td><td class="num">100</td><td>allow-rdp-from-bastion</td><td>10.20.0.0/26</td><td>3389</td></tr>
+<tr><td class="num">4000</td><td>deny-vnet-inbound</td><td>VirtualNetwork</td><td>all</td></tr>
+</tbody></table></div>
+
+<h3>3.3 Component details</h3>
+<div class="tbl"><table>
+<thead><tr><th>Component</th><th>Purpose</th><th>Configuration</th><th>Why required</th><th>Connections</th></tr></thead>
+<tbody>
+<tr><td>Bastion</td><td>Admin access without public IPs on VMs</td><td>Standard SKU, <code>tunneling_enabled</code>; toggle <code>enable_bastion</code></td><td>Standard is needed to reach a VM in a peered VNet</td><td>Portal RDP/SSH → support VM, SigNoz VM</td></tr>
+<tr><td>Support VM</td><td>Browser and tools inside the network</td><td>Windows, private IP only, password in Key Vault</td><td>The Web App and SigNoz UI are only reachable privately</td><td>Edge → Web App PE, SigNoz UI :8080</td></tr>
+<tr><td>SigNoz VM</td><td>Runs the OTel Collector and SigNoz</td><td>System-assigned identity; cloud-init installs Docker, az CLI, blobfuse2</td><td>Single-node self-hosted SigNoz</td><td>Receives OTLP; reads Blob, Event Hub, Azure Monitor</td></tr>
+<tr><td>Web App</td><td>Hosts DQ Lite as a typical containerised .NET app</td><td>Linux container from ACR via identity; public access off; health <code>/healthz</code>; OTel app settings</td><td>Representative App Service hosting</td><td>SQL, Key Vault, Blob, SigNoz VM</td></tr>
+<tr><td>ACR</td><td>Stores the app image</td><td>Basic, admin off, AcrPull for the Web App</td><td>Image-based deployment</td><td>Web App pulls over the public endpoint (Basic has no PE)</td></tr>
+<tr><td>Azure SQL</td><td>App database</td><td>Basic, private only, SQL login stored in Key Vault</td><td>Real database spans and platform metrics</td><td>Web App via PE; diagnostic logs → Event Hub</td></tr>
+<tr><td>Storage</td><td>Plain-text app logs</td><td>Container <code>app-logs</code>, Entra auth only</td><td>Many legacy apps write text logs to Blob</td><td>Web App writes; SigNoz VM reads (blobfuse2)</td></tr>
+<tr><td>Event Hub</td><td>Transport for platform logs</td><td>Standard, PE, trusted services, group <code>otelcol</code></td><td>Diagnostic settings target</td><td>Web App and SQL diagnostic settings → collector</td></tr>
+<tr><td>Key Vault</td><td>Secrets</td><td>RBAC; public endpoint kept on for the Terraform runner</td><td>No secrets in code or tfvars</td><td>Web App KV reference over PE</td></tr>
+</tbody></table></div>
+
+<h3>3.4 Managed identities and role assignments</h3>
+<div class="tbl"><table>
+<thead><tr><th>Principal</th><th>Role</th><th>Scope</th><th>Used for</th></tr></thead>
+<tbody>
+<tr><td>Web App (system-assigned)</td><td>AcrPull</td><td>ACR</td><td>Pull <code>dqlite-api</code> image</td></tr>
+<tr><td>Web App</td><td>Key Vault Secrets User</td><td>Key Vault</td><td>Connection-string reference</td></tr>
+<tr><td>Web App</td><td>Storage Blob Data Contributor</td><td>Storage account</td><td>Write text log files</td></tr>
+<tr><td>SigNoz VM (system-assigned)</td><td>Storage Blob Data Reader</td><td>Storage account</td><td>blobfuse2 mount of <code>app-logs</code></td></tr>
+<tr><td>SigNoz VM</td><td>Azure Event Hubs Data Receiver</td><td>Event Hub namespace</td><td><code>azure_event_hub</code> receiver</td></tr>
+<tr><td>SigNoz VM</td><td>Monitoring Reader</td><td>Resource group</td><td><code>azure_monitor</code> receiver</td></tr>
+<tr><td>Terraform runner (your user)</td><td>Key Vault Secrets Officer</td><td>Key Vault</td><td>Write generated secrets</td></tr>
+<tr><td>Terraform runner</td><td>Storage Blob Data Contributor</td><td>Storage account</td><td>Container management with Entra auth</td></tr>
+</tbody></table></div>
+
+<!-- ============================================================ 4 -->
+<h2 id="s4"><span class="n">4</span>Terraform implementation</h2>
+
+<h3>4.1 Repository structure</h3>
+<p>One flat stack, <b>one file per component</b>, no modules. Reuse across regions and accounts comes from variables and per-deployment <code>.tfvars</code> files.</p>
+<pre><code>signoz-poc/
+  .gitignore                       # .terraform/, *.tfstate*, terraform.tfstate.d/, *.tfplan, .ssh/
+  deploy/terraform/azure/infra/
+    providers.tf      main.tf        variables.tf     outputs.tf
+    network.tf        dns.tf         bastion.tf       signoz_vm.tf     support_vm.tf
+    webapp.tf         acr.tf         sql_server.tf    storageaccount.tf
+    keyvault.tf       secret.tf      eventhub.tf      diagnostics.tf   rbac.tf
+    scripts/cloud-init-signoz.yaml
+    environments/poc-centralindia.tfvars   poc-uksouth.tfvars   example.tfvars
+    README.md
+  app/          Dockerfile  deploy.sh  src/DqLite.Api/…
+  collector/    otel-collector-config.yaml  docker-compose.yaml  install.sh  .env.example
+  signoz/       casting.yaml
+  docs/</code></pre>
+
+<h3>4.2 Providers and state</h3>
+<div class="tbl"><table>
+<thead><tr><th>Item</th><th>Setting</th></tr></thead>
+<tbody>
+<tr><td>Terraform</td><td>≥ 1.9 (run with 1.16.4)</td></tr>
+<tr><td>Providers</td><td><code>azurerm ~&gt; 4.0</code>, <code>random ~&gt; 3.6</code>, <code>tls ~&gt; 4.0</code>, <code>local ~&gt; 2.5</code></td></tr>
+<tr><td>azurerm features</td><td><code>storage_use_azuread = true</code>; Key Vault purge on destroy; resource group deletable with contents</td></tr>
+<tr><td>State</td><td>Local backend, one <b>workspace</b> per deployment: <code>terraform.tfstate.d/poc-centralindia/</code>. Git-ignored because it holds generated secrets. Remote state in Blob (a separate bootstrap stack) was discussed and deferred for a single-user, 3-day POC; migration is <code>terraform init -migrate-state</code></td></tr>
+</tbody></table></div>
+
+<h3>4.3 Variables</h3>
+<div class="tbl"><table>
+<thead><tr><th>Group</th><th>Variables</th><th>Value in <code>poc-centralindia.tfvars</code></th></tr></thead>
+<tbody>
+<tr><td>Account</td><td><code>subscription_id</code>, <code>tenant_id</code></td><td>free-trial subscription; tenant from login</td></tr>
+<tr><td>Naming</td><td><code>project</code> (2–8 chars, validated), <code>environment</code> (2–6)</td><td><code>sigpoc</code>, <code>poc</code></td></tr>
+<tr><td>Regions</td><td><code>location</code>, <code>location_short</code>, <code>support_location</code>, <code>support_location_short</code></td><td>centralindia/cin, southindia/sin</td></tr>
+<tr><td>Network</td><td><code>vnet_address_space</code>, <code>subnet_prefixes</code> (object), <code>support_vnet_address_space</code>, <code>support_subnet_prefix</code></td><td>10.20.0.0/16 …, 10.30.0.0/16</td></tr>
+<tr><td>VMs</td><td><code>signoz_vm_size</code>, <code>signoz_vm_private_ip</code>, <code>signoz_vm_disk_size_gb</code>, <code>support_vm_size</code>, <code>support_vm_private_ip</code>, <code>support_vm_admin_username</code></td><td>B4as_v2, 10.20.1.10, 64; B2s_v2, 10.30.1.10, dqadmin</td></tr>
+<tr><td>Switches</td><td><code>enable_bastion</code>, <code>enable_support_vm</code>, <code>auto_shutdown_time</code>, <code>auto_shutdown_timezone</code></td><td>true, true, 1900, India Standard Time</td></tr>
+<tr><td>SKUs</td><td><code>bastion_sku</code>, <code>app_service_sku</code>, <code>acr_sku</code>, <code>sql_sku</code>, <code>eventhub_sku</code>, <code>storage_replication_type</code></td><td>defaults: Standard, B1, Basic, Basic, Standard, LRS</td></tr>
+<tr><td>Application</td><td><code>app_image</code>, <code>app_port</code>, <code>app_test_endpoints_enabled</code>, <code>otel_service_name</code>, <code>otel_customer</code></td><td><code>dqlite-api:v1</code>, 8080, true, dqlite-api, demo</td></tr>
+<tr><td>Tags</td><td><code>owner</code>, <code>expiry</code>, <code>extra_tags</code></td><td>&lt;owner&gt;, 2026-10-03</td></tr>
+</tbody></table></div>
+<p>Outputs include <code>resource_group</code>, <code>webapp_url</code>, <code>acr_name</code>, <code>acr_login_server</code>, <code>sql_server_fqdn</code>, <code>key_vault_name</code>, <code>storage_account</code>, <code>eventhub_namespace</code>, <code>signoz_vm_private_ip</code>, <code>signoz_ui_url</code>, <code>support_vm_login</code> and a ready-made <code>signoz_vm_ssh_command</code>.</p>
+
+<h3>4.4 Secrets handling</h3>
+<ul>
+  <li>Passwords are generated by <code>random_password</code> in <code>secret.tf</code> and written only to the deployment's own Key Vault.</li>
+  <li>The SigNoz VM SSH key is generated by <code>tls_private_key</code>, saved to git-ignored <code>.ssh/</code> (mode 0600) and copied to Key Vault.</li>
+  <li>The app reads its connection string through a Key Vault reference: <code>@Microsoft.KeyVault(VaultName=…;SecretName=sql-connection-string)</code>.</li>
+  <li>Nothing secret appears in <code>.tfvars</code> or git. The state file and <code>.ssh/</code> are the only local copies.</li>
+</ul>
+
+<h3>4.5 Deployment sequence and dependencies</h3>
+<pre><code>random suffix ─► resource group ─► VNets, subnets, NSGs ─► private DNS zones + links ─► peering
+                                 ├─► Key Vault ─► runner role ─► secrets
+                                 ├─► ACR, storage (+container), Event Hub (+hub, group)
+                                 ├─► SQL server ─► database ─► connection-string secret
+                                 ├─► SigNoz VM (cloud-init) ─► VM roles (Blob, Event Hub, Monitoring Reader)
+                                 ├─► support VM (needs password secret input)
+                                 ├─► App Service plan ─► Web App ─► roles (AcrPull, KV, Blob)
+                                 ├─► private endpoints (Web App, SQL, Blob, Event Hub, KV)
+                                 └─► diagnostic settings (Web App, SQL → Event Hub)</code></pre>
+
+<h3>4.6 Commands</h3>
+<pre><code>cd signoz-poc/deploy/terraform/azure/infra
+az login &amp;&amp; az account set --subscription &lt;id&gt;
+terraform init
+terraform workspace select poc-centralindia        # or: workspace new &lt;name&gt;
+terraform workspace show                           # always confirm before plan/apply/destroy
+terraform plan  -var-file=environments/poc-centralindia.tfvars -out=poc-centralindia.tfplan
+terraform apply poc-centralindia.tfplan
+terraform output</code></pre>
+<p><b>New region or account:</b> copy <code>environments/example.tfvars</code>, set the subscription, regions and address ranges, create a workspace of the same name, and plan/apply. No code changes are needed. This is exactly how the move from UK South to Central India was done.</p>
+
+<h3>4.7 Destroy and cleanup</h3>
+<pre><code>terraform workspace select poc-centralindia
+terraform destroy -var-file=environments/poc-centralindia.tfvars
+az group show -n rg-sigpoc-poc-cin   # expect ResourceNotFound</code></pre>
+<p>The UK South workspace was destroyed on 29 Sept after the region move. Key Vault is purged on destroy by the provider setting. Before destroying, export dashboard and alert JSON and record the volume measurements (§15).</p>
+
+<!-- ============================================================ 5 -->
+<h2 id="s5"><span class="n">5</span>Application — DQ Lite</h2>
+<p>DQ Lite is a small data-quality app: <b>datasets</b>, <b>rules</b> that check them, and <b>rule runs</b> with results. It exists to generate realistic, controllable telemetry.</p>
+
+<h3>5.1 Stack</h3>
+<div class="tbl"><table>
+<thead><tr><th>Layer</th><th>Technology</th></tr></thead>
+<tbody>
+<tr><td>Front end</td><td>Static page <code>wwwroot/index.html</code> served by the same app: rules list, Run now, add/delete, recent runs, a button per fault test</td></tr>
+<tr><td>Back end</td><td>ASP.NET Core 8 minimal API (<code>Program.cs</code>)</td></tr>
+<tr><td>Data access</td><td>EF Core 8 with SQL Server provider, retry on failure (3)</td></tr>
+<tr><td>Database</td><td>Azure SQL <code>sqldb-dqlite</code>; schema via <code>EnsureCreated</code>; seeded on first start with 1 dataset, 4 rules, 20,000 sample rows (~5% deliberately bad)</td></tr>
+<tr><td>Text logs</td><td><code>BlobTextLoggerProvider</code>: every 30 s uploads a block blob <code>app-logs/yyyy/MM/dd/app-HHmmss-&lt;instance&gt;.log</code> with managed identity</td></tr>
+<tr><td>Image</td><td><code>mcr.microsoft.com/dotnet/aspnet:8.0</code> + OpenTelemetry .NET auto-instrumentation v1.17.0; port 8080</td></tr>
+</tbody></table></div>
+
+<h3>5.2 Endpoints</h3>
+<div class="tbl"><table>
+<thead><tr><th>Method</th><th>Path</th><th>Behaviour</th><th>Telemetry it produces</th></tr></thead>
+<tbody>
+<tr><td>GET</td><td><code>/healthz</code></td><td>DB connectivity check; 200 or 503</td><td>Health check target</td></tr>
+<tr><td>GET</td><td><code>/api/datasets</code>, <code>/api/datasets/{id}</code></td><td>List / read</td><td>SQL SELECT spans</td></tr>
+<tr><td>GET/POST</td><td><code>/api/rules</code></td><td>List / create with validation</td><td>201, or 400 with problem details</td></tr>
+<tr><td>GET/PUT/DELETE</td><td><code>/api/rules/{id}</code></td><td>Read / update / delete</td><td>200, 204, 404</td></tr>
+<tr><td>POST</td><td><code>/api/rules/{id}/run</code></td><td>Runs the rule as a real SQL query, stores a <code>RuleRun</code></td><td>Custom span <code>RuleRun {name}</code>, <code>dq.*</code> metrics, info log</td></tr>
+<tr><td>GET</td><td><code>/api/runs?ruleId=&amp;status=</code></td><td>Last 100 runs</td><td>SQL spans</td></tr>
+<tr><td>GET</td><td><code>/api/test/status/{code}</code></td><td>Returns any status code</td><td>4xx/5xx spans, warning log</td></tr>
+<tr><td>GET</td><td><code>/api/test/error</code></td><td>500 problem response</td><td>Error span, error log</td></tr>
+<tr><td>GET</td><td><code>/api/test/exception</code></td><td>Unhandled <code>InvalidOperationException</code> wrapping <code>TimeoutException</code></td><td>Exception event, 500</td></tr>
+<tr><td>GET</td><td><code>/api/test/slow?ms=</code></td><td><code>Task.Delay</code> (max 30 s)</td><td>Slow server span, no DB time</td></tr>
+<tr><td>GET</td><td><code>/api/test/slow-sql?seconds=</code></td><td><code>WAITFOR DELAY</code> (max 25 s)</td><td>Slow SQL span inside the request</td></tr>
+<tr><td>GET</td><td><code>/api/test/db-fail</code></td><td>Opens a connection with a wrong password</td><td>Real <code>SqlException</code> 18456 (login failed)</td></tr>
+</tbody></table></div>
+<p>The <code>/api/test/*</code> group is registered only when <code>TEST_ENDPOINTS_ENABLED=true</code> (Terraform <code>app_test_endpoints_enabled</code>).</p>
+
+<h3>5.3 Designed for observability</h3>
+<ul>
+  <li><b>Real database work:</b> rules count failures over 20,000 rows, so SQL spans carry real latency and statement text.</li>
+  <li><b>Custom signals without an OpenTelemetry package:</b> <code>ActivitySource</code> and <code>Meter</code> named <code>DqLite.Api</code> from <code>System.Diagnostics</code>, picked up by the agent through <code>OTEL_DOTNET_AUTO_*_ADDITIONAL_SOURCES</code>. Metrics: <code>dq.rule_runs</code> (counter), <code>dq.rule_run.duration</code> (ms histogram), <code>dq.rule_run.failed_rows</code> (histogram).</li>
+  <li><b>Two log paths</b>, as a typical legacy app would have: structured <code>ILogger</code> logs over OTLP (with trace IDs), and plain text files in Blob.</li>
+  <li><b>Controlled faults:</b> each failure mode in the test plan has its own endpoint and UI button.</li>
+  <li><b>Log volume control:</b> <code>appsettings.json</code> sets ASP.NET Core and EF Core categories to Warning, which removed per-request framework noise found in the local test.</li>
+</ul>
+
+<h3>5.4 Build and deployment</h3>
+<pre><code># build locally (ACR Tasks are blocked on free trial) and push
+./app/deploy.sh v1          # docker build --platform linux/amd64 → az acr login → docker push
+# then in environments/poc-centralindia.tfvars:
+app_image = "dqlite-api:v1"
+terraform apply -var-file=environments/poc-centralindia.tfvars</code></pre>
+<p>Before Azure deployment the image was tested locally with SQL Server 2022 and the collector in Docker. Every endpoint returned the expected status, and all four rules found failures (101, 572, 374, 179 rows).</p>
+
+<!-- ============================================================ 6 -->
+<h2 id="s6"><span class="n">6</span>OpenTelemetry implementation</h2>
+
+<h3>6.1 Instrumentation approach</h3>
+<p>The application contains <b>no OpenTelemetry code or packages</b>. The Dockerfile adds the official auto-instrumentation release, and App Service app settings configure it. This is the "one image change" path.</p>
+<pre><code>ARG OTEL_DOTNET_AUTO_VERSION=v1.17.0
+ENV OTEL_DOTNET_AUTO_HOME=/otel-dotnet-auto
+RUN … curl -sSfL ".../releases/download/${OTEL_DOTNET_AUTO_VERSION}/otel-dotnet-auto-install.sh" -o /tmp/otel-install.sh \
+ &amp;&amp; SKIP_RELEASE_VERIFICATION=true sh /tmp/otel-install.sh …
+ENV CORECLR_ENABLE_PROFILING=1 \
+    CORECLR_PROFILER={918728DD-259F-4A6A-AC2B-B85E1B658318} \
+    CORECLR_PROFILER_PATH=/otel-dotnet-auto/linux-x64/OpenTelemetry.AutoInstrumentation.Native.so \
+    DOTNET_STARTUP_HOOKS=/otel-dotnet-auto/net/OpenTelemetry.AutoInstrumentation.StartupHook.dll</code></pre>
+
+<h4>App settings (from <code>webapp.tf</code>)</h4>
+<div class="tbl"><table>
+<thead><tr><th>Setting</th><th>Value</th></tr></thead>
+<tbody>
+<tr><td><code>OTEL_SERVICE_NAME</code></td><td><code>dqlite-api</code></td></tr>
+<tr><td><code>OTEL_RESOURCE_ATTRIBUTES</code></td><td><code>deployment.environment=poc,tenant.id=demo,cloud.region=centralindia</code></td></tr>
+<tr><td><code>OTEL_EXPORTER_OTLP_ENDPOINT</code></td><td><code>http://10.20.1.10:4318</code> (built from <code>var.signoz_vm_private_ip</code>)</td></tr>
+<tr><td><code>OTEL_EXPORTER_OTLP_PROTOCOL</code></td><td><code>http/protobuf</code></td></tr>
+<tr><td><code>OTEL_TRACES/METRICS/LOGS_EXPORTER</code></td><td><code>otlp</code></td></tr>
+<tr><td><code>OTEL_DOTNET_AUTO_TRACES_ADDITIONAL_SOURCES</code>, <code>…_METRICS_ADDITIONAL_SOURCES</code></td><td><code>DqLite.Api</code></td></tr>
+<tr><td><code>OTEL_DOTNET_AUTO_SQLCLIENT_SET_DBSTATEMENT_FOR_TEXT</code></td><td><code>true</code></td></tr>
+</tbody></table></div>
+
+<h3>6.2 Collector</h3>
+<p><code>otel/opentelemetry-collector-contrib:0.161.0</code> runs in Docker on the SigNoz VM (<code>collector/docker-compose.yaml</code>). It publishes 4317/4318/13133, joins <code>signoz-network</code>, mounts <code>/mnt/app-logs</code> (blobfuse2) and the VM root at <code>/hostfs</code> read-only, and uses <code>pid: host</code> for host metrics. Azure settings come from a <code>.env</code> file (subscription, resource group, Event Hub namespace).</p>
+
+<div class="tbl"><table>
+<thead><tr><th>Pipeline</th><th>Receivers</th><th>Processors</th><th>Exporters</th></tr></thead>
+<tbody>
+<tr><td>traces</td><td><code>otlp</code></td><td>memory_limiter, resource/env, batch</td><td><code>otlp/signoz</code>, debug</td></tr>
+<tr><td>metrics</td><td><code>otlp</code>, <code>azure_monitor</code></td><td>memory_limiter, resource/env, batch</td><td><code>otlp/signoz</code>, debug</td></tr>
+<tr><td>metrics/host</td><td><code>hostmetrics</code></td><td>memory_limiter, resourcedetection/host, resource/env, batch</td><td><code>otlp/signoz</code>, debug</td></tr>
+<tr><td>logs</td><td><code>otlp</code>, <code>filelog/blob</code>, <code>azure_event_hub</code></td><td>memory_limiter, resource/env, batch</td><td><code>otlp/signoz</code>, debug</td></tr>
+</tbody></table></div>
+
+<h4>Key configuration</h4>
+<pre><code>extensions:
+  file_storage: { directory: /var/lib/otelcol/storage, create_directory: true }
+  azure_auth:   { managed_identity: {} }          # VM identity via IMDS
+
+receivers:
+  otlp: { protocols: { grpc: { endpoint: 0.0.0.0:4317 }, http: { endpoint: 0.0.0.0:4318 } } }
+  filelog/blob:                                     # Plain-text text logs
+    include: [/mnt/app-logs/**/*.log]
+    start_at: beginning
+    storage: file_storage
+    operators:
+      - type: regex_parser
+        regex: '^(?P&lt;time&gt;\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3}) \[(?P&lt;level&gt;[A-Z]{3})\] (?P&lt;category&gt;[^:]+): (?P&lt;message&gt;.*)$'
+  azure_monitor:
+    subscription_ids: ["${env:AZURE_SUBSCRIPTION_ID}"]
+    resource_groups:  ["${env:AZURE_RESOURCE_GROUP}"]
+    services: [Microsoft.Web/sites, Microsoft.Web/serverFarms, Microsoft.Sql/servers/databases]
+    auth: { authenticator: azure_auth }
+    collection_interval: 60s
+  azure_event_hub:
+    auth: azure_auth
+    event_hub: { namespace: ${env:EVENTHUB_NAMESPACE}.servicebus.windows.net, name: platform-logs }
+    group: otelcol
+    format: azure
+  hostmetrics: { root_path: /hostfs, collection_interval: 30s, scrapers: { cpu, load, memory, disk, filesystem, network, paging, processes } }
+
+exporters:
+  otlp/signoz:
+    endpoint: ingester:4317          # SigNoz collector on signoz-network
+    tls: { insecure: true }
+    sending_queue: { enabled: true, storage: file_storage }
+    retry_on_failure: { enabled: true, max_elapsed_time: 10m }</code></pre>
+
+<h3>6.3 How telemetry reaches SigNoz</h3>
+<div class="tbl"><table>
+<thead><tr><th>Signal</th><th>Path</th><th>Auth</th></tr></thead>
+<tbody>
+<tr><td>App traces, metrics, logs</td><td>Web App → VNet integration → <code>10.20.1.10:4318</code> (OTLP/HTTP) → collector → <code>ingester:4317</code> → ClickHouse</td><td>Network only (NSG allows the app subnet)</td></tr>
+<tr><td>Blob text logs</td><td>App → Blob PE → <code>app-logs</code>; blobfuse2 on VM → <code>filelog/blob</code> → ingester</td><td>Managed identity both sides</td></tr>
+<tr><td>Azure platform logs</td><td>Diagnostic settings → Event Hub (trusted services) → <code>azure_event_hub</code> via PE → ingester</td><td>VM managed identity (Data Receiver)</td></tr>
+<tr><td>Azure platform metrics</td><td>Azure Monitor REST API → <code>azure_monitor</code> every 60 s → ingester</td><td>VM managed identity (Monitoring Reader)</td></tr>
+<tr><td>Host metrics</td><td>VM <code>/hostfs</code> → <code>hostmetrics</code> + <code>resourcedetection</code> → ingester</td><td>Local</td></tr>
+</tbody></table></div>
+
+<!-- ============================================================ 7 -->
+<h2 id="s7"><span class="n">7</span>SigNoz setup</h2>
+
+<h3>7.1 Deployment</h3>
+<p>SigNoz's <code>deploy/</code> Docker Compose files are deprecated. The supported installer is <b>Foundry</b> (<code>foundryctl</code>), driven by <code>signoz/casting.yaml</code>. <code>forge</code> generates <code>pours/deployment/compose.yaml</code> without touching containers, and <code>cast</code> applies it.</p>
+<pre><code>curl -fsSL https://signoz.io/foundry.sh | bash
+install -m 0755 /root/.local/bin/foundryctl /usr/local/bin/foundryctl
+cd /home/azureuser/signoz
+foundryctl forge -f casting.yaml     # inspect pours/deployment/compose.yaml
+foundryctl cast  -f casting.yaml</code></pre>
+<pre><code>spec:
+  deployment: { flavor: compose, mode: docker }
+  signoz: { spec: { image: signoz/signoz:v0.143.0 } }
+  patches:
+    - target: "deployment/compose.yaml"
+      operations:
+        - { op: remove,  path: /services/ingester/ports }        # our collector owns 4317/4318
+        - { op: replace, path: /services/ingester/image, value: signoz/signoz-otel-collector:v0.144.11 }
+        - { op: replace, path: /services/signoz-telemetrystore-migrator/image, value: signoz/signoz-otel-collector:v0.144.11 }
+        - { op: add,     path: /services/signoz-telemetrystore-clickhouse-0-0/mem_limit, value: 8g }</code></pre>
+
+<h3>7.2 Components (running)</h3>
+<div class="tbl"><table>
+<thead><tr><th>Container</th><th>Image</th><th>Role</th></tr></thead>
+<tbody>
+<tr><td><code>signoz-signoz-0</code></td><td>signoz/signoz:v0.143.0</td><td>Query service, UI (:8080), alerting, OpAMP server</td></tr>
+<tr><td><code>signoz-ingester-1</code></td><td>signoz/signoz-otel-collector:v0.144.11</td><td>SigNoz collector, writes to ClickHouse; no host ports</td></tr>
+<tr><td><code>signoz-telemetrystore-clickhouse-0-0</code></td><td>clickhouse/clickhouse-server:25.12.5</td><td>Telemetry store (traces, logs, metrics), 8 GB memory cap</td></tr>
+<tr><td><code>signoz-telemetrykeeper-clickhousekeeper-0</code></td><td>clickhouse/clickhouse-keeper:25.12.5</td><td>Coordination (replaces ZooKeeper)</td></tr>
+<tr><td><code>signoz-metastore-postgres-0</code></td><td>postgres:16</td><td>Metadata store (users, dashboards, alerts)</td></tr>
+<tr><td><code>signoz-telemetrystore-migrator</code></td><td>signoz/signoz-otel-collector:v0.144.11</td><td>Schema migrations; exited 0</td></tr>
+<tr><td><code>otelcol</code> (ours)</td><td>otel/opentelemetry-collector-contrib:0.161.0</td><td>Edge collector for all sources</td></tr>
+</tbody></table></div>
+
+<h3>7.3 Verification that data reached SigNoz</h3>
+<p>Verification used three independent checks: collector logs (export errors), direct ClickHouse queries, and the SigNoz UI. Snapshot taken on 29 Sept 2026 after Stage C:</p>
+<div class="tbl"><table>
+<thead><tr><th>Measure</th><th class="num">Value</th><th>Source</th></tr></thead>
+<tbody>
+<tr><td>Spans from <code>dqlite-api</code></td><td class="num">214</td><td><code>signoz_traces.distributed_signoz_index_v3</code></td></tr>
+<tr><td>Error spans</td><td class="num">31</td><td>same, <code>hasError</code></td></tr>
+<tr><td>p95 span duration</td><td class="num">2,013 ms</td><td>skewed by the deliberate slow tests</td></tr>
+<tr><td>Log records (all sources)</td><td class="num">332</td><td><code>signoz_logs.distributed_logs_v2</code></td></tr>
+<tr><td>Blob text log records</td><td class="num">64</td><td><code>resources_string['log.source']='blob'</code></td></tr>
+<tr><td>Azure diagnostic log records by category (30 min after fix)</td><td class="num">155 / 21 / 1</td><td>AppServiceConsoleLogs / AppServiceHTTPLogs / DatabaseWaitStatistics</td></tr>
+<tr><td>Metric names (total / Azure / host)</td><td class="num">266 / 156 / 26</td><td><code>signoz_metrics.distributed_time_series_v4</code></td></tr>
+<tr><td>ClickHouse disk used (all SigNoz DBs)</td><td class="num">≈ 0.9 MB</td><td><code>system.parts</code>, about 1 h of POC traffic</td></tr>
+<tr><td>Collector export errors after sign-up</td><td class="num">0</td><td><code>docker logs otelcol</code></td></tr>
+</tbody></table></div>
+
+<h3>7.4 Features: status</h3>
+<div class="tbl"><table>
+<thead><tr><th>Feature</th><th>Status</th><th>Notes</th></tr></thead>
+<tbody>
+<tr><td>Services (APM)</td><td><span class="pill ok">Data present</span></td><td><code>dqlite-api</code> with rate, errors, latency</td></tr>
+<tr><td>Traces</td><td><span class="pill ok">Data present</span></td><td>HTTP → RuleRun → SQL span trees; SQL statement text</td></tr>
+<tr><td>Logs</td><td><span class="pill ok">Data present</span></td><td>OTLP, Blob and Azure diagnostic logs</td></tr>
+<tr><td>Metrics</td><td><span class="pill ok">Data present</span></td><td>App, <code>dq.*</code>, Azure, host</td></tr>
+<tr><td>Infrastructure → Hosts</td><td><span class="pill ok">Data present</span></td><td>After hostmetrics fix (issue 20)</td></tr>
+<tr><td>Service map</td><td><span class="pill warn">Not recorded</span></td><td>Expected to show <code>dqlite-api</code> → SQL; to be captured in Stage D</td></tr>
+<tr><td>Dashboards</td><td><span class="pill warn">Pending</span></td><td>Stage D</td></tr>
+<tr><td>Alerts</td><td><span class="pill warn">Pending</span></td><td>Stage D; email channel to configure</td></tr>
+<tr><td>Retention</td><td><span class="pill info">Default</span></td><td>Left at defaults by decision, environment is short-lived</td></tr>
+</tbody></table></div>
+
+<!-- ============================================================ 8 -->
+<h2 id="s8"><span class="n">8</span>Testing performed</h2>
+<div class="callout warn"><p><b>Scope of this section.</b> The tests below were run as scripted <code>curl</code> traffic from inside the VNet (via <code>az vm run-command</code> on the SigNoz VM) and in a local Docker test, with results checked in collector output and ClickHouse. The formal Stage D run (k6 load, planned restart, alert firing, screenshots) has <b>not been executed yet</b>. Tests not yet run are marked as such.</p></div>
+
+<h3>8.1 Infrastructure checks (Phase 1)</h3>
+<div class="tbl"><table>
+<thead><tr><th>Test</th><th>Action</th><th>Expected</th><th>Actual</th><th>Status</th></tr></thead>
+<tbody>
+<tr><td>Private DNS</td><td><code>dig</code> from SigNoz VM</td><td>Private IPs</td><td>Web App 10.20.3.8, SQL .5, Blob .6, Event Hub .4, KV .7</td><td><span class="pill ok">Pass</span></td></tr>
+<tr><td>Web App private</td><td><code>curl</code> from laptop</td><td>Blocked</td><td>HTTP 403</td><td><span class="pill ok">Pass</span></td></tr>
+<tr><td>Web App from VNet</td><td><code>curl</code> from VM</td><td>200</td><td>200</td><td><span class="pill ok">Pass</span></td></tr>
+<tr><td>SQL / Event Hub ports</td><td><code>nc</code> 1433 / 5671</td><td>Open</td><td>Both succeeded</td><td><span class="pill ok">Pass</span></td></tr>
+<tr><td>Bastion → support VM</td><td>Portal RDP</td><td>Desktop</td><td>Used for SigNoz sign-up and UI checks</td><td><span class="pill ok">Pass</span></td></tr>
+<tr><td>Event Hub receiving</td><td>Metric IncomingMessages</td><td>&gt; 0</td><td>0 until issue 19 fixed, then messages arriving</td><td><span class="pill ok">Pass after fix</span></td></tr>
+</tbody></table></div>
+
+<h3>8.2 Application and telemetry tests</h3>
+<div class="tbl"><table>
+<thead><tr><th>Test</th><th>Action</th><th>Expected result</th><th>Actual result</th><th>SigNoz evidence</th><th>Status</th></tr></thead>
+<tbody>
+<tr><td>Normal traffic</td><td>Loops of list/read/run calls, rule CRUD</td><td>2xx, spans with SQL children</td><td>Rules list 200; runs 200 (e.g. rule 1: 1,017 failed rows, 1.1 s in Azure); create 201, update 200, delete 204</td><td>Server spans per route; <code>POST /api/rules/{id:int}/run</code> avg 101 ms</td><td><span class="pill ok">Pass</span></td></tr>
+<tr><td>4xx errors</td><td><code>/api/test/status/404</code>, invalid rule body, missing id</td><td>4xx, not counted as server errors</td><td>404, 400 with validation errors, 404</td><td>Span <code>GET /api/test/status/{code:int}</code>; warning logs</td><td><span class="pill ok">Pass</span></td></tr>
+<tr><td>5xx errors</td><td><code>/api/test/error</code></td><td>500, error span, error log</td><td>500 problem details</td><td>Included in 31 error spans; error log "Test endpoint returning 500"</td><td><span class="pill ok">Pass</span></td></tr>
+<tr><td>Slow API</td><td><code>/api/test/slow?ms=1500–3000</code></td><td>Long server span, no DB time</td><td>2.0 s locally</td><td><code>GET /api/test/slow</code> avg 1,505 ms</td><td><span class="pill ok">Pass</span></td></tr>
+<tr><td>Database latency</td><td><code>/api/test/slow-sql?seconds=1–3</code></td><td>SQL span dominates</td><td>3.0 s locally</td><td><code>GET /api/test/slow-sql</code> avg 1,605 ms; <code>db.query.text</code> "WAITFOR DELAY ?" (local)</td><td><span class="pill ok">Pass</span></td></tr>
+<tr><td>DB connection failure</td><td><code>/api/test/db-fail</code> (wrong password)</td><td>SqlException, 500</td><td>500; real login failure</td><td><code>GET /api/test/db-fail</code> error spans, avg 578 ms</td><td><span class="pill ok">Pass</span> (endpoint variant)</td></tr>
+<tr><td>Exceptions</td><td><code>/api/test/exception</code></td><td>Exception recorded, 500</td><td>500</td><td>Exception events seen in collector output (local); error spans in SigNoz</td><td><span class="pill ok">Pass</span></td></tr>
+<tr><td>Trace correlation</td><td>Run a rule</td><td>One trace: HTTP → RuleRun → SQL; logs share trace id</td><td>Confirmed locally: span tree and 50 log records carrying trace ids</td><td>Span names <code>RuleRun Email not null</code>, <code>SELECT [SampleRows]</code>, <code>INSERT</code></td><td><span class="pill ok">Pass</span> (server-side)</td></tr>
+<tr><td>Blob text logs</td><td>App writes files; collector reads</td><td>Parsed timestamp/severity/message</td><td>6 files within minutes; parsed INF/ERR with category</td><td>64 records with <code>log.source=blob</code></td><td><span class="pill ok">Pass</span></td></tr>
+<tr><td>Azure platform metrics</td><td>azure_monitor receiver</td><td>Web App and SQL metrics</td><td>156 metric names</td><td><code>azure_averageresponsetime_*</code>, <code>azure_bytesreceived_*</code>, …</td><td><span class="pill ok">Pass</span></td></tr>
+<tr><td>Azure platform logs</td><td>Diagnostic settings → Event Hub</td><td>Logs in SigNoz</td><td>Arriving after issue 19 fix</td><td>AppServiceConsoleLogs 155, AppServiceHTTPLogs 21, DatabaseWaitStatistics 1</td><td><span class="pill ok">Pass</span></td></tr>
+<tr><td>Host metrics</td><td>hostmetrics receiver</td><td>Hosts page populated</td><td>All required metrics and <code>host.name</code> present</td><td><code>system.cpu.time</code> 8 series, <code>host.name=vm-signoz-sigpoc-poc-cin</code></td><td><span class="pill ok">Pass</span></td></tr>
+<tr><td>DB failure, config variant</td><td>Wrong SQL password in app setting for 5 min</td><td>Health 503, alert</td><td>—</td><td>—</td><td><span class="pill warn">Not run</span></td></tr>
+<tr><td>Application restart</td><td><code>az webapp restart</code> under traffic</td><td>Data resumes &lt; 2 min</td><td>—</td><td>—</td><td><span class="pill warn">Not run</span></td></tr>
+<tr><td>High traffic / load</td><td>10× traffic for 10 min</td><td>No loss, SigNoz responsive</td><td>—</td><td>—</td><td><span class="pill warn">Not run</span></td></tr>
+<tr><td>Browser → back-end correlation</td><td>—</td><td>—</td><td>The UI is static and not instrumented; traces start at the server</td><td>—</td><td><span class="pill info">Out of scope</span></td></tr>
+<tr><td>Dashboards and alerts</td><td>Build and fire</td><td>Alerts fire and resolve</td><td>—</td><td>—</td><td><span class="pill warn">Not run</span></td></tr>
+</tbody></table></div>
+
+<!-- ============================================================ 9 -->
+<h2 id="s9"><span class="n">9</span>Errors and troubleshooting</h2>
+<p>Every issue below occurred during this POC and is taken from the recorded Terraform, Azure CLI, Docker, collector and SigNoz output. Nothing here is hypothetical. Click an issue to expand it.</p>
+
+{{ISSUES}}
+
+<!-- ============================================================ 10 -->
+<h2 id="s10"><span class="n">10</span>Troubleshooting timeline</h2>
+<p>Times are UTC, taken from Azure API responses and container logs where available. Times marked ≈ are approximate.</p>
+<ol class="timeline">
+  <li><span class="when">29 Sept</span><br>Plan agreed: 3 phases, free trial, 1–3 days. Terraform written flat, then reorganised into per-component files with per-deployment tfvars.</li>
+  <li class="bad"><span class="when">29 Sept ≈19:00–19:30</span><br>First apply in UK South: network, Bastion (13 min 11 s), Key Vault, Storage, Event Hub, ACR created. SigNoz VM, support VM, SQL server and App Service plan failed (issues 4–6).</li>
+  <li class="bad"><span class="when">29 Sept 19:57</span><br>Retried with Bsv2 sizes: VM capacity errors again; SQL <code>ProvisioningDisabled</code> again (SQL operation start 19:57:49Z).</li>
+  <li class="warn"><span class="when">29 Sept ≈20:10</span><br>Region switched to Central India via new tfvars and workspace. First UK destroy ran against the wrong workspace (issue 7), then succeeded.</li>
+  <li class="ok"><span class="when">29 Sept ≈20:30</span><br>Central India apply complete. Phase 1 checks pass from inside the VNet. blobfuse2 missing on VM, installed (issue 9).</li>
+  <li class="warn"><span class="when">29 Sept ≈20:45–20:55</span><br>Local image build fails (issues 10–11), then succeeds with v1.17.0. Local end-to-end test finds collector storage bug (issue 12) and log noise (issue 13).</li>
+  <li class="bad"><span class="when">29 Sept ≈21:05</span><br><code>az acr build</code> rejected, <code>TasksOperationsNotAllowed</code> (issue 14). Image built locally and pushed as <code>dqlite-api:v1</code>.</li>
+  <li class="ok"><span class="when">29 Sept 21:14</span><br>Web App running the app from ACR; <code>/healthz</code> 200; first rule run 21:14:49Z.</li>
+  <li class="ok"><span class="when">29 Sept 21:22</span><br>Collector installed on VM (health "Server available" at 21:22:11Z); traces, metrics, logs and Blob logs received, 0 errors. Phase 2 complete.</li>
+  <li class="warn"><span class="when">29 Sept ≈21:30–21:42</span><br>SigNoz Compose install found deprecated; Foundry used (issue 15); ingester ports patched (issue 16). Stack healthy at ≈21:42.</li>
+  <li class="bad"><span class="when">29 Sept 21:42–21:44</span><br>Collector cannot connect to <code>ingester:4317</code>; SigNoz logs "failed to find or create agent" (issue 17).</li>
+  <li class="ok"><span class="when">29 Sept ≈21:55</span><br>Admin sign-up done; ingester opens; first data in ClickHouse (163 spans, 98 logs). Stage A/B complete.</li>
+  <li class="warn"><span class="when">29 Sept 22:00–22:02</span><br>Config validation errors for Event Hub/Azure Monitor auth on 0.135.0 (issue 18). Upgraded to 0.161.0; Azure Monitor metrics arrive (156 names).</li>
+  <li class="bad"><span class="when">29 Sept ≈22:05</span><br>Event Hub shows 0 incoming messages (issue 19). Terraform fix for trusted services prepared and applied.</li>
+  <li class="ok"><span class="when">29 Sept ≈22:20</span><br>Event Hub messages arrive; Azure diagnostic logs visible in SigNoz. Stage C complete.</li>
+  <li class="ok"><span class="when">29 Sept ≈22:30</span><br>SigNoz Hosts page empty (issue 20); hostmetrics and resourcedetection added; host data present.</li>
+  <li><span class="when">Next</span><br>Stage D: dashboards, alert testing, formal tests, measurement, findings, destroy.</li>
+</ol>
+
+<!-- ============================================================ 11 -->
+<h2 id="s11"><span class="n">11</span>Security</h2>
+<div class="tbl"><table>
+<thead><tr><th>Area</th><th>Implemented</th><th>POC simplification</th></tr></thead>
+<tbody>
+<tr><td>Network boundary</td><td>Web App, SQL, Blob, Event Hub, Key Vault private (public access off except Key Vault); NSG default-deny inside the VNet; no public IPs on VMs</td><td>Key Vault public endpoint kept on (RBAC-protected) so Terraform on a laptop can write secrets</td></tr>
+<tr><td>Admin access</td><td>Bastion Standard only</td><td>Single shared Windows local admin account</td></tr>
+<tr><td>Secrets</td><td>Generated by Terraform into Key Vault; KV references in the app; nothing in git</td><td>Local Terraform state holds secrets on one laptop</td></tr>
+<tr><td>Managed identities</td><td>Web App and SigNoz VM use system-assigned identities for ACR, Key Vault, Blob, Event Hub and Azure Monitor; no client secrets anywhere</td><td>Roles at resource or RG scope; would need review per subscription at scale</td></tr>
+<tr><td>Database access</td><td>Private endpoint only, TLS 1.2, connection string from Key Vault</td><td>SQL authentication with an admin login instead of Entra-only auth with the app identity</td></tr>
+<tr><td>SigNoz access</td><td>UI reachable only from the support VM subnet (NSG); local SigNoz admin created at first sign-up</td><td>No SSO; UI over HTTP inside the VNet</td></tr>
+<tr><td>OTLP security</td><td>Only the app integration subnet can reach 4317/4318</td><td>OTLP is plaintext and unauthenticated; collector → ingester is insecure gRPC on a Docker network</td></tr>
+<tr><td>Event Hub</td><td>Private endpoint; trusted Microsoft services for diagnostic settings</td><td>Diagnostic settings use the namespace root rule (Azure requirement for the setting)</td></tr>
+<tr><td>Container supply chain</td><td>Pinned versions: OTel .NET v1.17.0, collector 0.161.0, SigNoz v0.143.0, ingester v0.144.11</td><td>Auto-instrumentation installer run with <code>SKIP_RELEASE_VERIFICATION=true</code>; ACR Basic has no private endpoint</td></tr>
+<tr><td>Fault endpoints</td><td>Behind <code>TEST_ENDPOINTS_ENABLED</code></td><td>Enabled and unauthenticated in the POC</td></tr>
+</tbody></table></div>
+
+<!-- ============================================================ 12 -->
+<h2 id="s12"><span class="n">12</span>Cost</h2>
+<div class="callout"><p>Figures are <b>list-price estimates</b> made during planning (in USD, rounded). They have not yet been checked against Cost Management; actual spend will be recorded before destroy. The subscription is a free trial with a spending limit, so charges come from the trial credit.</p></div>
+<div class="tbl"><table>
+<thead><tr><th>Category</th><th>Resource (POC sizing)</th><th class="num">≈ per hour</th><th class="num">≈ per month 24×7</th></tr></thead>
+<tbody>
+<tr><td>SigNoz infrastructure</td><td>VM B4as_v2 + 64 GB Premium SSD</td><td class="num">0.19</td><td class="num">140–160</td></tr>
+<tr><td>Access</td><td>Bastion Standard + public IP</td><td class="num">0.29</td><td class="num">210</td></tr>
+<tr><td>Access</td><td>Support VM B2s_v2 Windows</td><td class="num">≈0.08</td><td class="num">≈60</td></tr>
+<tr><td>Compute (app)</td><td>App Service plan B1 Linux</td><td class="num">0.02</td><td class="num">13</td></tr>
+<tr><td>Database</td><td>Azure SQL Basic</td><td class="num">&lt;0.01</td><td class="num">5</td></tr>
+<tr><td>Messaging</td><td>Event Hubs Standard, 1 TU</td><td class="num">0.03</td><td class="num">22</td></tr>
+<tr><td>Networking</td><td>5 private endpoints, 5 DNS zones, peering traffic</td><td class="num">0.05</td><td class="num">≈40</td></tr>
+<tr><td>Storage</td><td>Storage LRS, ACR Basic, Key Vault</td><td class="num">≈0.01</td><td class="num">≈8</td></tr>
+<tr><td colspan="2"><b>Total</b></td><td class="num"><b>≈0.67</b></td><td class="num"><b>≈500</b></td></tr>
+</tbody></table></div>
+<p>For a 3-day POC this is about <b>$45–50</b> if left running, less with the 19:00 VM auto-shutdown and removing Bastion overnight (<code>enable_bastion = false</code>). Bastion is the largest line and exists only for access. The SigNoz licence cost is zero (self-hosted community edition). Measured telemetry storage was about 0.9 MB after an hour of test traffic, far too little to extrapolate from; Stage D includes a longer measurement.</p>
+
+<h3>POC sizing vs production sizing</h3>
+<div class="tbl"><table>
+<thead><tr><th>Component</th><th>POC</th><th>Production (from the v2 costing, UK South)</th></tr></thead>
+<tbody>
+<tr><td>SigNoz</td><td>1 VM, 4 vCPU / 16 GB, OS disk</td><td>Single node D4s v5 ≈ $229/month total, or HA on AKS (3 nodes, ClickHouse ×2, Keeper ×3) ≈ $711/month; or SigNoz Cloud (EU) $49+ usage</td></tr>
+<tr><td>Collector</td><td>Docker on SigNoz VM</td><td>Central collector on Container Apps (≈ $48/month), ≥ 2 replicas</td></tr>
+<tr><td>Event Hub</td><td>Standard 1 TU, 1-day retention</td><td>Standard, shared across environments (≈ $22/month)</td></tr>
+<tr><td>Access</td><td>Bastion + Windows VM</td><td>Existing corporate access paths, SSO to SigNoz</td></tr>
+</tbody></table></div>
+
+<!-- ============================================================ 13 -->
+<h2 id="s13"><span class="n">13</span>Production considerations</h2>
+<div class="tbl"><table>
+<thead><tr><th>Area</th><th>POC state</th><th>Needed for production</th></tr></thead>
+<tbody>
+<tr><td>High availability</td><td>Single SigNoz VM; single collector</td><td>ClickHouse replicas + Keeper quorum (AKS) or SigNoz Cloud; ≥ 2 collector replicas behind internal ingress</td></tr>
+<tr><td>Scalability</td><td>1 environment, light traffic</td><td>Size ClickHouse from measured volume × 42; tail sampling (keep errors and slow traces)</td></tr>
+<tr><td>Security hardening</td><td>See §11 simplifications</td><td>TLS + auth on OTLP; SSO and RBAC in SigNoz; Entra-only SQL; KV private-only with a pipeline runner inside the VNet; ACR Premium with PE; release verification in image build; disable fault endpoints</td></tr>
+<tr><td>Backup</td><td>None</td><td>Scheduled ClickHouse backups to GRS or immutable Blob; Postgres metastore backup; tested restore</td></tr>
+<tr><td>Disaster recovery</td><td>None</td><td>Documented RPO/RTO; redeploy from Terraform + Foundry casting; alert rules and dashboards as code</td></tr>
+<tr><td>Retention</td><td>SigNoz defaults</td><td>Set per signal (e.g. 90 days prod logs/traces) with long-term archive in Blob</td></tr>
+<tr><td>Performance</td><td>Not load-tested</td><td>Load test collector and ClickHouse at projected peak; memory limits; persistent queues</td></tr>
+<tr><td>Capacity planning</td><td>0.9 MB/h observed at test traffic</td><td>Measure real application GB/day and series count per environment</td></tr>
+<tr><td>Alerting</td><td>Not configured</td><td>Rules grouped by <code>tenant.id</code> and <code>deployment.environment</code>; chat and ticketing routing; maintenance windows</td></tr>
+<tr><td>Access control</td><td>One local admin</td><td>SSO (edition-dependent), roles per team</td></tr>
+<tr><td>Cost optimisation</td><td>Bastion dominates POC cost</td><td>5-minute scrape for non-alerting Azure metrics; filter Azure metric namespaces; sampling</td></tr>
+<tr><td>Event Hub</td><td>Trusted services enabled</td><td><b>Mandatory</b> on every private namespace used by diagnostic settings (issue 19)</td></tr>
+<tr><td>Collector version</td><td>0.161.0 (Event Hub managed identity)</td><td>Pin ≥ 0.161 and test upgrades; several receivers are alpha</td></tr>
+<tr><td>Installation</td><td>Foundry, manual sign-up</td><td>Runbook covers Foundry casting, first admin sign-up before ingestion, and upgrades</td></tr>
+<tr><td>Operational ownership</td><td>POC engineer</td><td>Named owner for SigNoz upgrades, ClickHouse operations and on-call; Terraform approval workflow</td></tr>
+<tr><td>State</td><td>Local workspace state</td><td>Remote state in Blob (bootstrap stack pattern) with pipeline and OIDC</td></tr>
+</tbody></table></div>
+
+<!-- ============================================================ 14 -->
+<h2 id="s14"><span class="n">14</span>Final architecture and flows</h2>
+<p>The diagram in §2.2 is the final implemented architecture. The flows below describe each path in order, with the component that owns each hop.</p>
+
+<div class="grid2">
+<div>
+<h4>Request flow</h4>
+<ol>
+<li>Engineer opens the Azure portal and connects to <code>vm-support-sigpoc-poc-sin</code> through Bastion (RDP).</li>
+<li>Edge on the support VM resolves <code>app-dqlite-…azurewebsites.net</code> to 10.20.3.8 through the private DNS zone linked to the support VNet.</li>
+<li>Traffic crosses the global VNet peering to the Web App private endpoint.</li>
+<li>App Service routes to the <code>dqlite-api</code> container on port 8080.</li>
+</ol>
+</div>
+<div>
+<h4>Application flow</h4>
+<ol>
+<li>Container starts; the OTel profiler and startup hook load before the app.</li>
+<li>App reads <code>ConnectionStrings__Default</code>, resolved by App Service from Key Vault through the KV private endpoint using the app identity.</li>
+<li>On first start EF Core creates the schema and seeds data.</li>
+<li>Requests execute the minimal-API handlers; rule runs create a custom <code>RuleRun</code> span and <code>dq.*</code> metrics.</li>
+</ol>
+</div>
+<div>
+<h4>Database flow</h4>
+<ol>
+<li>Outbound traffic leaves through <code>snet-app-integration</code> (route-all).</li>
+<li><code>sql-sigpoc-poc-cin-xxxxx.database.windows.net</code> resolves to 10.20.3.5.</li>
+<li>TDS on 1433 with TLS to the SQL private endpoint; SQL authentication.</li>
+<li>Each command becomes a SqlClient span with the statement text.</li>
+</ol>
+</div>
+<div>
+<h4>Telemetry flow</h4>
+<ol>
+<li>Auto-instrumentation batches spans, metrics and logs and sends OTLP/HTTP to 10.20.1.10:4318.</li>
+<li>NSG rule 120 allows only the app subnet.</li>
+<li>Collector adds <code>deployment.environment</code> and <code>tenant.id</code>, batches, and exports OTLP/gRPC to <code>ingester:4317</code> with a disk-backed retry queue.</li>
+<li>Ingester writes to ClickHouse; the SigNoz query service reads it for the UI.</li>
+</ol>
+</div>
+<div>
+<h4>Logs flow</h4>
+<ol>
+<li><b>OTLP logs:</b> <code>ILogger</code> records with trace and span IDs, as in the telemetry flow.</li>
+<li><b>Blob text logs:</b> app uploads a file every 30 s via the Blob private endpoint; blobfuse2 mounts <code>app-logs</code> read-only with the VM identity; <code>filelog/blob</code> parses time, level, category and message; progress is kept in <code>file_storage</code>.</li>
+<li><b>Platform logs:</b> diagnostic settings on the Web App and SQL database send to Event Hub <code>platform-logs</code> through trusted services; <code>azure_event_hub</code> reads group <code>otelcol</code> via the private endpoint with the VM identity.</li>
+</ol>
+</div>
+<div>
+<h4>Metrics flow</h4>
+<ol>
+<li><b>App metrics:</b> ASP.NET Core, HttpClient, SqlClient, runtime, process and <code>dq.*</code> over OTLP.</li>
+<li><b>Azure metrics:</b> <code>azure_monitor</code> calls the Azure Monitor API every 60 s for the Web App, plan and SQL database in the resource group (Monitoring Reader).</li>
+<li><b>Host metrics:</b> <code>hostmetrics</code> reads the VM through <code>/hostfs</code> every 30 s; <code>resourcedetection</code> adds <code>host.name</code> and Azure VM attributes.</li>
+</ol>
+</div>
+<div>
+<h4>Traces flow</h4>
+<ol>
+<li>Server span per request (<code>GET /api/test/slow-sql</code>, …).</li>
+<li>Child <code>RuleRun {name}</code> span for rule executions.</li>
+<li>SqlClient child spans with statement text; exceptions recorded as span events with status Error.</li>
+<li>Stored in <code>signoz_traces</code>; visible under Services and Traces.</li>
+</ol>
+</div>
+<div>
+<h4>Alerting flow (designed, not yet configured)</h4>
+<ol>
+<li>SigNoz rule evaluator queries ClickHouse on a schedule.</li>
+<li>Planned rules: error rate &gt; 5%, p95 latency &gt; 1 s, database errors, service down (no data).</li>
+<li>Alertmanager in the SigNoz container groups and routes to an email channel.</li>
+<li>To be configured and fired in Stage D.</li>
+</ol>
+</div>
+</div>
+
+<!-- ============================================================ 15 -->
+<h2 id="s15"><span class="n">15</span>Final POC result</h2>
+
+<div class="grid2">
+<div>
+<h3>Validated</h3>
+<ul>
+<li>Terraform deployment of a private App Service environment, reusable across regions by tfvars</li>
+<li>.NET 8 container auto-instrumentation with no code change</li>
+<li>App traces with SQL statements, custom spans and metrics</li>
+<li>Log-to-trace correlation</li>
+<li>Plain-text Blob text logs into SigNoz</li>
+<li>Azure Monitor metrics and diagnostic logs with managed identity only</li>
+<li>Self-hosted SigNoz via Foundry on a single VM</li>
+<li>Host metrics for the SigNoz VM</li>
+</ul>
+</div>
+<div>
+<h3>Not validated yet</h3>
+<ul>
+<li>Dashboards and alert rules, including notification delivery</li>
+<li>Application restart and load behaviour</li>
+<li>Service map capture</li>
+<li>Collector and SigNoz outage behaviour</li>
+<li>Retention enforcement and a meaningful GB/day figure</li>
+<li>Actual cost from Cost Management</li>
+<li>UK South deployment and 42-environment scale</li>
+<li>Container Apps collector (optional Phase 4)</li>
+</ul>
+</div>
+</div>
+
+<h3>Known limitations</h3>
+<ul>
+<li>Different region from the target (Central India instead of UK South) because of free-trial restrictions. Telemetry behaviour is not region-dependent, but latency and pricing are.</li>
+<li>Single-node SigNoz and collector; no HA, backup or TLS on OTLP.</li>
+<li>Demo app, not production code; the front end is not instrumented in the browser.</li>
+</ul>
+
+<h3>Open items and next steps</h3>
+<div class="tbl"><table>
+<thead><tr><th>#</th><th>Item</th><th>Owner</th></tr></thead>
+<tbody>
+<tr><td>1</td><td>Stage D: "DQ Lite" dashboard; 4 alert rules with email channel; fire and resolve each</td><td>Engineering</td></tr>
+<tr><td>2</td><td>Run restart, load (10×), DB config failure, collector and SigNoz outage tests; capture screenshots</td><td>Engineering</td></tr>
+<tr><td>3</td><td>Measure GB/day, series count and actual Azure spend; project to all environments</td><td>Engineering</td></tr>
+<tr><td>4</td><td>Export dashboard/alert JSON to <code>signoz/</code>; tidy deprecated collector aliases (<code>otlp_grpc</code>, <code>file_log</code>)</td><td>Engineering</td></tr>
+<tr><td>5</td><td><code>terraform destroy</code> and confirm the resource group is gone</td><td>Engineering</td></tr>
+<tr><td>6</td><td>Decide the next POC on a pay-as-you-go subscription in UK South, with the Container Apps collector and a real application image</td><td>Project leads</td></tr>
+<tr><td>7</td><td>Confirm data-residency and per-customer separation requirements (self-hosted UK South vs SigNoz Cloud EU)</td><td>Project leads</td></tr>
+</tbody></table></div>
+
+<p class="foot">Source of truth: repository <code>signoz-poc/</code> (Terraform, app, collector, casting), Terraform workspace <code>poc-centralindia</code>, Azure resource group <code>rg-sigpoc-poc-cin</code>, and command output recorded on 29–30 Sept 2026. Figures in §7.3 are a point-in-time snapshot. Cost figures in §12 are estimates.</p>
+</main>
+</div>
+
+<script>
+{{SCRIPT}}
+</script>

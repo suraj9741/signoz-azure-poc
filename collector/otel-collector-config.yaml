@@ -1,0 +1,157 @@
+# OpenTelemetry Collector on the SigNoz VM.
+# Phase 2: receive app OTLP + plain-text app logs from Blob.
+# Phase 3: export to SigNoz (ingester on signoz-network); Azure platform metrics (azuremonitor)
+#          and platform logs (azureeventhub), both authenticated with the VM's managed identity.
+
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+  # Remembers how far each Blob log file has been read, across restarts.
+  file_storage:
+    directory: /var/lib/otelcol/storage
+    create_directory: true
+  # VM system-assigned managed identity (IMDS) for Azure Monitor and Event Hub.
+  azure_auth:
+    managed_identity: {}
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+  # App text logs written to Blob, mounted read-only by blobfuse2 at /mnt/app-logs.
+  #   2026-09-30 10:15:02.123 [INF] DqLite.Api.Services.RuleRunner: message
+  filelog/blob:
+    include: [/mnt/app-logs/**/*.log]
+    start_at: beginning
+    poll_interval: 30s
+    storage: file_storage
+    include_file_path: true
+    resource:
+      service.name: dqlite-api
+      log.source: blob
+    operators:
+      - type: regex_parser
+        regex: '^(?P<time>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3}) \[(?P<level>[A-Z]{3})\] (?P<category>[^:]+): (?P<message>.*)$'
+        timestamp:
+          parse_from: attributes.time
+          layout_type: strptime
+          layout: '%Y-%m-%d %H:%M:%S.%L'
+        severity:
+          parse_from: attributes.level
+          mapping:
+            info: INF
+            warn: WRN
+            error: ERR
+            fatal: CRT
+            debug: DBG
+      - type: move
+        from: attributes.message
+        to: body
+
+  # Azure platform metrics (Web App, SQL) pulled from the Azure Monitor API. Needs Monitoring Reader.
+  azure_monitor:
+    subscription_ids: ["${env:AZURE_SUBSCRIPTION_ID}"]
+    resource_groups: ["${env:AZURE_RESOURCE_GROUP}"]
+    services:
+      - Microsoft.Web/sites
+      - Microsoft.Web/serverFarms
+      - Microsoft.Sql/servers/databases
+    auth:
+      authenticator: azure_auth
+    collection_interval: 60s
+    initial_delay: 1s
+    cache_resources: 3600
+
+  # Azure platform logs (diagnostic settings → Event Hub). Needs Azure Event Hubs Data Receiver.
+  azure_event_hub:
+    auth: azure_auth
+    event_hub:
+      namespace: ${env:EVENTHUB_NAMESPACE}.servicebus.windows.net
+      name: platform-logs
+    group: otelcol
+    format: azure
+    storage: file_storage
+
+  # Host metrics of the SigNoz VM itself (SigNoz Infrastructure → Hosts). Host root mounted at /hostfs.
+  hostmetrics:
+    collection_interval: 30s
+    root_path: /hostfs
+    scrapers:
+      cpu:
+        metrics:
+          system.cpu.utilization:
+            enabled: true
+      load: {}
+      memory:
+        metrics:
+          system.memory.utilization:
+            enabled: true
+      disk: {}
+      filesystem:
+        exclude_mount_points:
+          mount_points: [/dev/*, /proc/*, /sys/*, /run/*, /var/lib/docker/*, /snap/*, /mnt/app-logs, /mnt/blobfuse-cache]
+          match_type: regexp
+      network: {}
+      paging: {}
+      processes: {}
+
+processors:
+  # host.name, os.type, cloud.* and azure.vm.* from the VM (IMDS). Required by the Hosts page.
+  resourcedetection/host:
+    detectors: [env, azure, system]
+    system:
+      hostname_sources: [os]
+    timeout: 5s
+    override: false
+  memory_limiter:
+    check_interval: 5s
+    limit_percentage: 80
+    spike_limit_percentage: 20
+  batch: {}
+  resource/env:
+    attributes:
+      - key: deployment.environment
+        value: ${env:DEPLOYMENT_ENVIRONMENT}
+        action: upsert
+      - key: tenant.id
+        value: ${env:TENANT_ID}
+        action: upsert
+
+exporters:
+  # SigNoz's collector (Foundry service "ingester"), reached over the shared Docker network.
+  otlp/signoz:
+    endpoint: ingester:4317
+    tls:
+      insecure: true
+    sending_queue:
+      enabled: true
+      storage: file_storage # survive collector restarts and short SigNoz outages
+    retry_on_failure:
+      enabled: true
+      max_elapsed_time: 10m
+  debug:
+    verbosity: basic
+
+service:
+  extensions: [health_check, file_storage, azure_auth]
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, resource/env, batch]
+      exporters: [otlp/signoz, debug]
+    metrics:
+      receivers: [otlp, azure_monitor]
+      processors: [memory_limiter, resource/env, batch]
+      exporters: [otlp/signoz, debug]
+    metrics/host:
+      receivers: [hostmetrics]
+      processors: [memory_limiter, resourcedetection/host, resource/env, batch]
+      exporters: [otlp/signoz, debug]
+    logs:
+      receivers: [otlp, filelog/blob, azure_event_hub]
+      processors: [memory_limiter, resource/env, batch]
+      exporters: [otlp/signoz, debug]

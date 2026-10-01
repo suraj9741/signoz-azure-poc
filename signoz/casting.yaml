@@ -1,0 +1,33 @@
+# SigNoz install via Foundry (the supported installer; deploy/ Compose files are deprecated).
+#   foundryctl forge -f casting.yaml   # generate pours/deployment/compose.yaml (safe, no containers touched)
+#   foundryctl cast  -f casting.yaml   # create/update containers
+# Versions pinned for the POC (30 Sept 2026):
+#   signoz v0.143.0 (2026-09-23), signoz-otel-collector v0.144.11 (2026-09-22, released alongside it)
+apiVersion: v1alpha1
+kind: Installation
+metadata:
+  name: signoz
+spec:
+  deployment:
+    flavor: compose
+    mode: docker
+  signoz:
+    spec:
+      image: signoz/signoz:v0.143.0
+  patches:
+    - target: "deployment/compose.yaml"
+      operations:
+        # Our own collector (collector/) owns host ports 4317/4318 and forwards to the
+        # ingester over signoz-network, so the ingester publishes no host ports.
+        - op: remove
+          path: /services/ingester/ports
+        - op: replace
+          path: /services/ingester/image
+          value: signoz/signoz-otel-collector:v0.144.11
+        - op: replace
+          path: /services/signoz-telemetrystore-migrator/image
+          value: signoz/signoz-otel-collector:v0.144.11
+        # Keep ClickHouse from starving the 16 GB VM.
+        - op: add
+          path: /services/signoz-telemetrystore-clickhouse-0-0/mem_limit
+          value: 8g

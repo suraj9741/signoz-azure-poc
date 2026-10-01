@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DQ Lite</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 24px; color: #1f2328; background: #fff; }
+    h1 { margin: 0 0 4px; }
+    p.sub { margin: 0 0 20px; color: #59636e; }
+    section { margin-bottom: 28px; }
+    table { border-collapse: collapse; width: 100%; max-width: 960px; }
+    th, td { border-bottom: 1px solid #d1d9e0; padding: 6px 8px; text-align: left; font-size: 14px; }
+    button { padding: 5px 10px; margin: 2px; cursor: pointer; }
+    .tests button { background: #fff4e5; border: 1px solid #d4a72c; }
+    input, select { padding: 4px; margin: 2px; }
+    pre { background: #f6f8fa; padding: 10px; max-width: 960px; overflow-x: auto; font-size: 13px; }
+    .pass { color: #1a7f37; } .fail { color: #cf222e; } .error { color: #9a6700; }
+  </style>
+</head>
+<body>
+  <h1>DQ Lite</h1>
+  <p class="sub">Data-quality demo app for the SigNoz POC</p>
+
+  <section>
+    <h2>Rules</h2>
+    <table id="rules"><thead><tr><th>Id</th><th>Name</th><th>Type</th><th>Column</th><th>Enabled</th><th></th></tr></thead><tbody></tbody></table>
+    <h3>Add rule</h3>
+    <input id="name" placeholder="Name">
+    <select id="type"><option>not_null</option><option>range</option><option>unique</option></select>
+    <select id="column"><option>Email</option><option>CustomerName</option><option>Amount</option></select>
+    <input id="min" placeholder="Min" size="5"><input id="max" placeholder="Max" size="5">
+    <button onclick="addRule()">Add</button>
+  </section>
+
+  <section>
+    <h2>Recent runs</h2>
+    <table id="runs"><thead><tr><th>Id</th><th>Rule</th><th>Started (UTC)</th><th>Duration ms</th><th>Status</th><th>Failed rows</th></tr></thead><tbody></tbody></table>
+  </section>
+
+  <section class="tests">
+    <h2>Observability tests</h2>
+    <button onclick="call('/api/test/status/404')">404</button>
+    <button onclick="call('/api/test/status/400')">400</button>
+    <button onclick="call('/api/test/error')">500 error</button>
+    <button onclick="call('/api/test/exception')">Exception</button>
+    <button onclick="call('/api/test/slow?ms=3000')">Slow API 3s</button>
+    <button onclick="call('/api/test/slow-sql?seconds=5')">Slow SQL 5s</button>
+    <button onclick="call('/api/test/db-fail')">DB login failure</button>
+    <button onclick="call('/healthz')">Health</button>
+  </section>
+
+  <h3>Last response</h3>
+  <pre id="out">–</pre>
+
+  <script>
+    const out = document.getElementById('out');
+    async function call(url, opts) {
+      const started = performance.now();
+      const res = await fetch(url, opts);
+      const text = await res.text();
+      out.textContent = `${opts?.method ?? 'GET'} ${url} → ${res.status} in ${Math.round(performance.now() - started)} ms\n\n${text}`;
+      return res.ok && text ? JSON.parse(text) : null;
+    }
+    async function load() {
+      const rules = await call('/api/rules') ?? [];
+      document.querySelector('#rules tbody').innerHTML = rules.map(r =>
+        `<tr><td>${r.id}</td><td>${r.name}</td><td>${r.type}</td><td>${r.column}</td><td>${r.enabled}</td>
+         <td><button onclick="run(${r.id})">Run now</button><button onclick="del(${r.id})">Delete</button></td></tr>`).join('');
+      const runs = await fetch('/api/runs').then(r => r.ok ? r.json() : []);
+      document.querySelector('#runs tbody').innerHTML = runs.slice(0, 15).map(r =>
+        `<tr><td>${r.id}</td><td>${r.ruleId}</td><td>${r.startedAt.replace('T', ' ').slice(0, 19)}</td><td>${r.durationMs}</td>
+         <td class="${r.status}">${r.status}</td><td>${r.failedRows}</td></tr>`).join('');
+    }
+    async function run(id) { await call(`/api/rules/${id}/run`, { method: 'POST' }); load(); }
+    async function del(id) { await call(`/api/rules/${id}`, { method: 'DELETE' }); load(); }
+    async function addRule() {
+      const body = {
+        datasetId: 1,
+        name: document.getElementById('name').value,
+        type: document.getElementById('type').value,
+        column: document.getElementById('column').value,
+        min: document.getElementById('min').value || null,
+        max: document.getElementById('max').value || null
+      };
+      await call('/api/rules', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      load();
+    }
+    load();
+  </script>
+</body>
+</html>

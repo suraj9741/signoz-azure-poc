@@ -1,0 +1,34 @@
+services:
+  otelcol:
+    # 0.161.0: first versions with managed-identity auth for the Event Hub receiver (0.135.0 needed a connection string).
+    image: otel/opentelemetry-collector-contrib:${OTELCOL_VERSION:-0.161.0}
+    container_name: otelcol
+    restart: unless-stopped
+    command: ["--config=/etc/otelcol/config.yaml"]
+    pid: host # hostmetrics processes/load see the VM
+    user: "0:0" # read the blobfuse2 mount and write the file_storage directory
+    environment:
+      DEPLOYMENT_ENVIRONMENT: ${DEPLOYMENT_ENVIRONMENT:-poc}
+      TENANT_ID: ${TENANT_ID:-demo}
+      # Set in .env on the VM (from terraform output); used by azuremonitor / azureeventhub.
+      AZURE_SUBSCRIPTION_ID: ${AZURE_SUBSCRIPTION_ID:?set in .env}
+      AZURE_RESOURCE_GROUP: ${AZURE_RESOURCE_GROUP:?set in .env}
+      EVENTHUB_NAMESPACE: ${EVENTHUB_NAMESPACE:?set in .env}
+    ports:
+      - "4317:4317"   # OTLP gRPC (app)
+      - "4318:4318"   # OTLP HTTP (app)
+      - "13133:13133" # health check
+    volumes:
+      - ./otel-collector-config.yaml:/etc/otelcol/config.yaml:ro
+      - /mnt/app-logs:/mnt/app-logs:ro,rslave
+      - otelcol-storage:/var/lib/otelcol/storage
+      - /:/hostfs:ro,rslave # hostmetrics reads the VM, not the container
+
+    networks: [default, signoz-network]
+
+networks:
+  signoz-network:
+    external: true # created by SigNoz (Foundry)
+
+volumes:
+  otelcol-storage:
